@@ -3,11 +3,32 @@ jQuery(document).ready(function($) {
     // Client-side debug state tracking (resets on page reload)
     let debugOverrides = {};
 
+    // Initialize platform override from localStorage
+    initializePlatformOverride();
+
+    // Store original username value for cancel functionality
+    const $usernameInput = $('#wporg-username');
+    if ($usernameInput.length && $usernameInput.val()) {
+        $usernameInput.data('original', $usernameInput.val());
+    }
+
 
     // Verify WordPress.org username
     $('#verify-username').on('click', function() {
         verifyUsername();
     });
+
+    // Cancel username edit
+    $('#cancel-edit').on('click', function() {
+        cancelUsernameEdit();
+    });
+
+    // Global functions for username editing
+    window.editUsername = function() {
+        $('#account-form').slideDown();
+        $('#edit-username-link').hide();
+        $('#wporg-username').focus();
+    };
 
     // Toggle section debug mode
     window.toggleDebugMode = function(section) {
@@ -23,26 +44,37 @@ jQuery(document).ready(function($) {
     window.overridePlatform = function(platform) {
         if (!platform) return;
 
-        $.ajax({
-            url: ctw_ajax.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'ctw_set_platform',
-                platform: platform,
-                nonce: ctw_ajax.nonce
-            },
-            success: function(response) {
-                if (response.success) {
-                    $('#current-platform').text(response.data.platform);
-                    $('#platform-override').hide();
-                    $('#platform-wrong-link').show();
+        if (platform === 'reset') {
+            // Remove override and show auto-detected platform
+            localStorage.removeItem('ctw_platform_override');
+            $('#current-platform').text($('#current-platform').data('original') || 'Auto-detected');
+        } else {
+            // Store override in localStorage
+            localStorage.setItem('ctw_platform_override', platform);
+            $('#current-platform').text(platform);
+        }
 
-                    // Update instructions for all sections that depend on platform
-                    updatePlatformInstructions();
-                }
-            }
-        });
+        $('#platform-override').hide();
+        $('#platform-wrong-link').show();
+        $('#platform-override').val(''); // Reset dropdown
+
+        // Update instructions for all sections that depend on platform
+        updatePlatformInstructions();
     };
+
+    function initializePlatformOverride() {
+        const $platform = $('#current-platform');
+        const originalPlatform = $platform.text();
+
+        // Store original platform for reset functionality
+        $platform.data('original', originalPlatform);
+
+        // Check for stored override
+        const override = localStorage.getItem('ctw_platform_override');
+        if (override) {
+            $platform.text(override);
+        }
+    }
 
     function updatePlatformInstructions() {
         // Reload the page to get updated platform-specific instructions
@@ -100,6 +132,7 @@ jQuery(document).ready(function($) {
         const username = $('#wporg-username').val().trim();
         const $button = $('#verify-username');
         const $status = $('#username-status');
+        const isUpdate = $button.text().includes('Update');
 
         if (!username) {
             showUsernameStatus('Please enter a username', 'error');
@@ -132,9 +165,19 @@ jQuery(document).ready(function($) {
                 showUsernameStatus('Failed to verify username', 'error');
             },
             complete: function() {
-                $button.prop('disabled', false).text('Verify & Save Username');
+                $button.prop('disabled', false).text(isUpdate ? 'Update Username' : 'Verify & Save Username');
             }
         });
+    }
+
+    function cancelUsernameEdit() {
+        $('#account-form').slideUp();
+        $('#edit-username-link').show();
+        $('#username-status').hide();
+
+        // Reset the input to original value if it was changed
+        const originalValue = $('#wporg-username').data('original') || '';
+        $('#wporg-username').val(originalValue);
     }
 
     function updateAllSections(results) {

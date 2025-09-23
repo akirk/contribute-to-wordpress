@@ -12,11 +12,6 @@
     transition: all 0.3s ease;
 }
 
-.stage-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
 .checklist-section {
     background: #fff;
     border: 1px solid #c3c4c7;
@@ -93,14 +88,6 @@
     background: rgb(248, 215, 218);
     color: rgb(114, 28, 36);
     border: 1px solid rgb(245, 198, 203);
-}
-
-.instructions {
-    margin-top: 15px;
-    padding: 15px;
-    background-color: #f8f9fa;
-    border-left: 4px solid #0073aa;
-    border-radius: 0 4px 4px 0;
 }
 
 .instructions h3 {
