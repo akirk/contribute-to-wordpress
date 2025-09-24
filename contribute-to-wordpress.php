@@ -128,12 +128,12 @@ class ContributeToWordPress {
         $wporg_username = get_user_meta( get_current_user_id(), 'ctw_wporg_username', true );
         ?>
         <div class="wrap" id="ctw-admin">
-            <h1>WordPress Contribution Readiness</h1>
+            <h1>Contribute to WordPress</h1>
 
             <!-- Contribution Stages -->
             <div class="contribution-stages">
-                <h2>Your Contribution Journey</h2>
-                <p>Check your current stage in WordPress contribution readiness:</p>
+                <h2>Thank you for wanting to contribute to WordPress!</h2>
+                <p>Find below an analysis of your environment so that you can get started with development!</p>
 
                 <div id="contribution-stages-container">
                     <?php $this->render_contribution_stages(); ?>
@@ -252,48 +252,55 @@ class ContributeToWordPress {
         $stages = $this->get_stages_data();
 
         foreach ( $stages as $stage_key => $stage ) {
-            $this->render_single_stage( $stage_key, $stage );
+            // Show stages with undetermined status initially
+            $this->render_single_stage( $stage_key, $stage, array(), true );
         }
     }
 
-    private function render_single_stage( $stage_key, $stage, $debug_overrides = array() ) {
+    private function render_single_stage( $stage_key, $stage, $debug_overrides = array(), $undetermined = false ) {
         $missing_requirements = array();
         $missing_optional = array();
         $stage_ready = true;
 
-        // Check required items
-        foreach ( $stage['requirements'] as $req ) {
-            // Check debug override first, then real state
-            if ( isset( $debug_overrides[$req] ) ) {
-                $requirement_met = $debug_overrides[$req];
-            } else {
-                $requirement_met = $this->check_requirement( $req );
-            }
-
-            if ( ! $requirement_met ) {
-                $missing_requirements[] = $this->sections[$req]['name'];
-                $stage_ready = false;
-            }
-        }
-
-        // Check optional items
-        if ( isset( $stage['optional'] ) ) {
-            foreach ( $stage['optional'] as $opt ) {
+        if ( $undetermined ) {
+            // Show undetermined status during initial load
+            $status_class = 'undetermined';
+            $status_icon = '⏳';
+        } else {
+            // Check required items
+            foreach ( $stage['requirements'] as $req ) {
                 // Check debug override first, then real state
-                if ( isset( $debug_overrides[$opt] ) ) {
-                    $requirement_met = $debug_overrides[$opt];
+                if ( isset( $debug_overrides[$req] ) ) {
+                    $requirement_met = $debug_overrides[$req];
                 } else {
-                    $requirement_met = $this->check_requirement( $opt );
+                    $requirement_met = $this->check_requirement( $req );
                 }
 
                 if ( ! $requirement_met ) {
-                    $missing_optional[] = $this->sections[$opt]['name'];
+                    $missing_requirements[] = $this->sections[$req]['name'];
+                    $stage_ready = false;
                 }
             }
-        }
 
-        $status_class = $stage_ready ? 'available' : 'not_ready';
-        $status_icon = $stage_ready ? '✅' : '⭕';
+            // Check optional items
+            if ( isset( $stage['optional'] ) ) {
+                foreach ( $stage['optional'] as $opt ) {
+                    // Check debug override first, then real state
+                    if ( isset( $debug_overrides[$opt] ) ) {
+                        $requirement_met = $debug_overrides[$opt];
+                    } else {
+                        $requirement_met = $this->check_requirement( $opt );
+                    }
+
+                    if ( ! $requirement_met ) {
+                        $missing_optional[] = $this->sections[$opt]['name'];
+                    }
+                }
+            }
+
+            $status_class = $stage_ready ? 'available' : 'not_ready';
+            $status_icon = $stage_ready ? '✅' : '⭕';
+        }
 
         ?>
         <div class="stage-item <?php echo esc_attr( $status_class ); ?>" data-stage="<?php echo esc_attr( $stage_key ); ?>">
@@ -305,13 +312,18 @@ class ContributeToWordPress {
                     </h3>
                     <p class="stage-description"><?php echo esc_html( $stage['description'] ); ?></p>
 
-                    <?php if ( ! $stage_ready && ! empty( $missing_requirements ) ) : ?>
+                    <?php if ( $undetermined ) : ?>
+                        <p class="stage-checking">
+                            <span class="dashicons dashicons-update"></span>
+                            Checking requirements...
+                        </p>
+                    <?php elseif ( ! $stage_ready && ! empty( $missing_requirements ) ) : ?>
                         <p class="stage-missing">
                             <strong>Missing:</strong> <?php echo esc_html( implode( ', ', $missing_requirements ) ); ?>
                         </p>
                     <?php endif; ?>
 
-                    <?php if ( ! empty( $missing_optional ) ) : ?>
+                    <?php if ( ! $undetermined && ! empty( $missing_optional ) ) : ?>
                         <p class="stage-optional">
                             <strong>Optional:</strong> <?php echo esc_html( implode( ', ', $missing_optional ) ); ?> (recommended but not required)
                         </p>
@@ -372,19 +384,14 @@ class ContributeToWordPress {
 
     private function render_environment_checks() {
         foreach ( $this->sections as $key => $section ) {
-            $check_result = $this->check_requirement( $key );
-            $is_available = (bool) $check_result;
-            $status_class = $is_available ? 'complete' : 'incomplete';
-            $icon_class = $is_available ? 'dashicons-yes-alt' : 'dashicons-dismiss';
+            // Skip actual checking on page load - will be done via AJAX
+            $status_class = 'loading';
+            $icon_class = 'dashicons-update';
+            $status_text = 'Checking...';
+            $status_badge_class = 'loading';
 
-            // Show version info if available
-            if ( $is_available && is_string( $check_result ) ) {
-                $status_text = "✓ " . $check_result . " detected";
-            } else {
-                $status_text = $is_available ? '✓ Available' : '✗ Not available';
-            }
-
-            $status_badge_class = $is_available ? 'success' : 'error';
+            // For initial load, assume tools are not available and show instructions
+            $show_instructions_initially = true;
 
             ?>
             <div class="checklist-item <?php echo esc_attr( $status_class ); ?>" data-section="<?php echo esc_attr( $key ); ?>">
@@ -398,7 +405,7 @@ class ContributeToWordPress {
                     </span>
                 </div>
 
-                <?php if ( ! $is_available ) : ?>
+                <?php if ( $show_instructions_initially ) : ?>
                     <div class="instructions" id="instructions-<?php echo esc_attr( $key ); ?>">
                         <div class="instructions-section">
                             <p class="instructions-text">

@@ -277,6 +277,11 @@
     background: #fafbfc;
 }
 
+.stage-item.undetermined {
+    border-color: #c3c4c7;
+    background: #f6f7f7;
+}
+
 .stage-content {
     display: flex;
     align-items: center;
@@ -302,6 +307,22 @@
 
 .stage-title.not_ready {
     color: #586069;
+}
+
+.stage-title.undetermined {
+    color: #646970;
+}
+
+.stage-checking {
+    margin: 10px 0 0 0;
+    color: #646970;
+    font-size: 14px;
+    font-style: italic;
+}
+
+.stage-checking .dashicons-update {
+    animation: spin 1s linear infinite;
+    margin-right: 5px;
 }
 
 .stage-description {
@@ -411,5 +432,50 @@
 
 .status-badge-clickable {
     cursor: pointer;
+}
+
+.status-badge.loading {
+    background: #f0f0f1;
+    color: #646970;
+    border: 1px solid #c3c4c7;
+}
+
+.checklist-item.loading {
+    background-color: #f9f9f9;
+    border-color: #c3c4c7;
+}
+
+.checklist-item.loading .dashicons-update {
+    color: #646970;
+    animation: spin 1s linear infinite;
+}
+
+.stage-loading {
+    padding: 40px 20px;
+    text-align: center;
+    color: #646970;
+    background: #f9f9f9;
+    border: 1px solid #c3c4c7;
+    border-radius: 6px;
+    margin-bottom: 15px;
+}
+
+.stage-loading .dashicons-update {
+    animation: spin 1s linear infinite;
+    margin-right: 8px;
+}
+
+#contribution-stages-container {
+    transition: opacity 0.3s ease-in-out;
+}
+
+.stage-item {
+    transform: translateY(0);
+    transition: all 0.3s ease-in-out;
+}
+
+.stage-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 

@@ -6,6 +6,9 @@ jQuery(document).ready(function($) {
     // Initialize platform override from localStorage
     initializePlatformOverride();
 
+    // Load requirements asynchronously after page load
+    loadRequirementsAsync();
+
     // Store original username value for cancel functionality
     const $usernameInput = $('#wporg-username');
     if ($usernameInput.length && $usernameInput.val()) {
@@ -170,23 +173,34 @@ jQuery(document).ready(function($) {
         }
     }
 
-    function updateSectionUI(section, isAvailable, sectionData) {
+    function updateSectionUI(section, checkResult, sectionData) {
         const $section = $('[data-section="' + section + '"]');
         const $icon = $section.find('.dashicons');
         const $badge = $section.find('.status-badge');
         const $instructions = $('#instructions-' + section);
 
-        // Update classes
-        $section.removeClass('complete incomplete').addClass(isAvailable ? 'complete' : 'incomplete');
+        // Determine if available (could be boolean or string with version info)
+        const isAvailable = !!checkResult;
+        let statusText;
 
-        // Update icon
-        $icon.removeClass('dashicons-yes-alt dashicons-dismiss')
+        // Show version info if available
+        if (isAvailable && typeof checkResult === 'string') {
+            statusText = "✓ " + checkResult + " detected";
+        } else {
+            statusText = isAvailable ? '✓ Available' : '✗ Not available';
+        }
+
+        // Remove loading state and update classes
+        $section.removeClass('loading complete incomplete').addClass(isAvailable ? 'complete' : 'incomplete');
+
+        // Update icon (remove loading spinner)
+        $icon.removeClass('dashicons-update dashicons-yes-alt dashicons-dismiss')
               .addClass(isAvailable ? 'dashicons-yes-alt' : 'dashicons-dismiss');
 
         // Update status badge
-        $badge.removeClass('success error')
+        $badge.removeClass('loading success error')
               .addClass(isAvailable ? 'success' : 'error')
-              .text(isAvailable ? '✓ Available' : '✗ Not available');
+              .text(statusText);
 
         // Show/hide instructions
         if (isAvailable) {
@@ -271,6 +285,34 @@ jQuery(document).ready(function($) {
             }, 500);
         }
     });
+
+    function loadRequirementsAsync() {
+        // Load requirements via AJAX after page is rendered
+        $.ajax({
+            url: ctw_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ctw_check_requirements',
+                nonce: ctw_ajax.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    updateAllSections(response.data);
+                    // Add a small delay to show the tool updates first, then update stages
+                    setTimeout(function() {
+                        updateContributionStages();
+                    }, 500);
+                }
+            },
+            error: function() {
+                console.log('Failed to load requirements');
+                // Show error state for all sections
+                $('.checklist-item.loading').removeClass('loading').addClass('incomplete');
+                $('.checklist-item .dashicons-update').removeClass('dashicons-update').addClass('dashicons-dismiss');
+                $('.status-badge.loading').removeClass('loading').addClass('error').text('✗ Error loading');
+            }
+        });
+    }
 
     // Add hover effects for interactive elements
     $('.status-badge').on('mouseenter', function() {
