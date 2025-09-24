@@ -98,17 +98,19 @@ class ContributeToWordPress {
     }
 
     public function add_admin_menu() {
-        add_management_page(
+        add_menu_page(
             'Contribute to WordPress',
             'Contribute to WordPress',
             'manage_options',
             'contribute-to-wordpress',
-            array( $this, 'admin_page' )
+            array( $this, 'admin_page' ),
+            'dashicons-wordpress',
+            30
         );
     }
 
     public function enqueue_scripts( $hook ) {
-        if ( $hook !== 'tools_page_contribute-to-wordpress' ) {
+        if ( $hook !== 'toplevel_page_contribute-to-wordpress' ) {
             return;
         }
 
@@ -133,7 +135,7 @@ class ContributeToWordPress {
             <!-- Contribution Stages -->
             <div class="contribution-stages">
                 <h2>Thank you for wanting to contribute to WordPress!</h2>
-                <p>Find below an analysis of your environment so that you can get started with development!</p>
+                <p>Find below an analysis of your environment so that you can get started with development:</p>
 
                 <div id="contribution-stages-container">
                     <?php $this->render_contribution_stages(); ?>
