@@ -1,12 +1,8 @@
-jQuery(document).ready(function($) {
+jQuery(document).ready(function ($) {
 
-    // Client-side debug state tracking (resets on page reload)
-    let debugOverrides = {};
+    let overrides = {};
 
-    // Initialize platform override from localStorage
     initializePlatformOverride();
-
-    // Load requirements asynchronously after page load
     loadRequirementsAsync();
 
     // Store original username value for cancel functionality
@@ -17,51 +13,48 @@ jQuery(document).ready(function($) {
 
 
     // Verify WordPress.org username
-    $('#verify-username').on('click', function() {
+    $('#verify-username').on('click', function () {
         verifyUsername();
     });
 
     // Cancel username edit
-    $('#cancel-edit').on('click', function() {
+    $('#cancel-edit').on('click', function () {
         cancelUsernameEdit();
     });
 
     // Global functions for username editing
-    window.editUsername = function() {
+    window.editUsername = function () {
         $('#account-form').slideDown();
         $('#edit-username-link').hide();
         $('#wporg-username').focus();
     };
 
     // Toggle section debug mode
-    window.toggleDebugMode = function(section) {
+    window.toggleDebugMode = function (section) {
         toggleSectionDebug(section);
     };
 
     // Platform override functions
-    window.showPlatformOverride = function() {
+    window.showPlatformOverride = function () {
         $('#platform-wrong-link').hide();
         $('#platform-override').show();
     };
 
-    window.overridePlatform = function(platform) {
+    window.overridePlatform = function (platform) {
         if (!platform) return;
 
         if (platform === 'reset') {
-            // Remove override and show auto-detected platform
-            localStorage.removeItem('ctw_platform_override');
+            delete overrides.platform;
             $('#current-platform').text($('#current-platform').data('original') || 'Auto-detected');
         } else {
-            // Store override in localStorage
-            localStorage.setItem('ctw_platform_override', platform);
+            overrides.platform = platform;
             $('#current-platform').text(platform);
         }
 
         $('#platform-override').hide();
         $('#platform-wrong-link').show();
-        $('#platform-override').val(''); // Reset dropdown
+        $('#platform-override').val('');
 
-        // Update instructions for all sections that depend on platform
         updatePlatformInstructions();
     };
 
@@ -69,43 +62,40 @@ jQuery(document).ready(function($) {
         const $platform = $('#current-platform');
         const originalPlatform = $platform.text();
 
-        // Store original platform for reset functionality
         $platform.data('original', originalPlatform);
-
-        // Check for stored override
-        const override = localStorage.getItem('ctw_platform_override');
-        if (override) {
-            $platform.text(override);
-        }
     }
 
     function updatePlatformInstructions() {
-        // Reload the page to get updated platform-specific instructions
-        window.location.reload();
+        loadRequirementsAsync();
     }
 
     function toggleSectionDebug(section) {
         const $section = $('[data-section="' + section + '"]');
 
-        // Determine current state from DOM
+        // Determine current actual state from DOM
         const currentlyAvailable = $section.hasClass('complete');
 
         // Check if already in debug mode
-        if (debugOverrides.hasOwnProperty(section)) {
-            // Toggle the debug state
-            debugOverrides[section] = !debugOverrides[section];
+        if (overrides.hasOwnProperty(section)) {
+            // Remove override and return to actual detected state
+            delete overrides[section];
+
+            // Get the actual detected result and use it
+            loadSingleRequirement(section).then(function () {
+                updateContributionStages();
+            });
         } else {
             // First time toggling - set opposite of current state
-            debugOverrides[section] = !currentlyAvailable;
+            overrides[section] = !currentlyAvailable;
+
+            const debugResponseData = {
+                status: overrides[section],
+                version: overrides[section] ? 'Available' : null,
+                instructions: ''
+            };
+            updateSectionUI(section, debugResponseData);
+            updateContributionStages();
         }
-
-        console.log('Toggled debug state for', section, 'to', debugOverrides[section]);
-
-        // Update UI instantly with debug state
-        updateSectionUI(section, debugOverrides[section]);
-
-        // Update stages instantly
-        updateContributionStages();
     }
 
 
@@ -137,21 +127,21 @@ jQuery(document).ready(function($) {
                 username: username,
                 nonce: ctw_ajax.nonce
             },
-            success: function(response) {
+            success: function (response) {
                 if (response.success) {
                     showUsernameStatus(response.data, 'success');
                     // Refresh the page to show updated account status
-                    setTimeout(function() {
+                    setTimeout(function () {
                         window.location.reload();
                     }, 1500);
                 } else {
                     showUsernameStatus(response.data, 'error');
                 }
             },
-            error: function() {
+            error: function () {
                 showUsernameStatus('Failed to verify username', 'error');
             },
-            complete: function() {
+            complete: function () {
                 $button.prop('disabled', false).text(isUpdate ? 'Update Username' : 'Verify & Save Username');
             }
         });
@@ -173,78 +163,136 @@ jQuery(document).ready(function($) {
         }
     }
 
-    function updateSectionUI(section, checkResult, sectionData) {
+    function updateSectionUI(section, responseData) {
         const $section = $('[data-section="' + section + '"]');
         const $icon = $section.find('.dashicons');
         const $badge = $section.find('.status-badge');
         const $instructions = $('#instructions-' + section);
 
-        // Determine if available (could be boolean or string with version info)
-        const isAvailable = !!checkResult;
+        const isAvailable = !!responseData.status;
         let statusText;
 
-        // Show version info if available
-        if (isAvailable && typeof checkResult === 'string') {
-            statusText = "✓ " + checkResult + " detected";
+        if (isAvailable && responseData.version) {
+            statusText = "✓ " + responseData.version + " detected";
         } else {
             statusText = isAvailable ? '✓ Available' : '✗ Not available';
         }
 
-        // Remove loading state and update classes
         $section.removeClass('loading complete incomplete').addClass(isAvailable ? 'complete' : 'incomplete');
 
-        // Update icon (remove loading spinner)
         $icon.removeClass('dashicons-update dashicons-yes-alt dashicons-dismiss')
-              .addClass(isAvailable ? 'dashicons-yes-alt' : 'dashicons-dismiss');
+            .addClass(isAvailable ? 'dashicons-yes-alt' : 'dashicons-dismiss');
 
-        // Update status badge
         $badge.removeClass('loading success error')
-              .addClass(isAvailable ? 'success' : 'error')
-              .text(statusText);
+            .addClass(isAvailable ? 'success' : 'error')
+            .text(statusText);
 
-        // Show/hide instructions
         if (isAvailable) {
             $instructions.slideUp();
         } else {
-            if ($instructions.length === 0 && sectionData && sectionData.instructions) {
-                // Create instructions if they don't exist
-                $section.append('<div class="instructions" id="instructions-' + section + '">' + sectionData.instructions + '</div>');
+            if ($instructions.length === 0 && responseData.instructions) {
+                $section.append('<div class="instructions" id="instructions-' + section + '">' + responseData.instructions + '</div>');
+            } else if (responseData.instructions) {
+                $instructions.html(responseData.instructions);
             }
             $instructions.slideDown();
         }
     }
 
+    function getToolStatus(toolKey) {
+        const $section = $('[data-section="' + toolKey + '"]');
+        return $section.hasClass('complete');
+    }
+
+    function getToolName(toolKey) {
+        const toolNames = {
+            'git': 'Git',
+            'wp_repo': 'WordPress Core Repository',
+            'node': 'Node.js',
+            'npm': 'npm',
+            'composer': 'Composer',
+            'gutenberg': 'Gutenberg Plugin',
+            'plugin_theme_git': 'Plugin/Theme Git Repository',
+            'wporg_account': 'WordPress.org Account'
+        };
+
+        return toolNames[toolKey] || toolKey;
+    }
+
     function updateContributionStages() {
-        // Send current debug overrides to get updated stages
-        console.log('Updating stages with debug overrides:', debugOverrides);
-        $.ajax({
-            url: ctw_ajax.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'ctw_get_stages',
-                debug_overrides: JSON.stringify(debugOverrides),
-                nonce: ctw_ajax.nonce
-            },
-            success: function(response) {
-                if (response.success) {
-                    $('#contribution-stages-container').html(response.data.html);
-                    console.log('Stages updated successfully');
-                } else {
-                    console.log('Failed to update stages:', response);
+        const stages = {
+            'web': { requirements: [] },
+            'php': { requirements: ['git', 'wp_repo'], optional: ['composer'] },
+            'assets': { requirements: ['git', 'wp_repo', 'node', 'npm'] },
+            'blocks': { requirements: ['git', 'wp_repo', 'node', 'npm', 'gutenberg'] },
+            'plugins_themes': { requirements: ['git', 'plugin_theme_git'] },
+            'contribute': { requirements: ['wporg_account'] }
+        };
+
+        Object.keys(stages).forEach(stageKey => {
+            const stage = stages[stageKey];
+            const $stage = $('[data-stage="' + stageKey + '"]');
+
+            if ($stage.length === 0) return;
+
+            let stageReady = true;
+            const missingRequirements = [];
+
+            stage.requirements.forEach(req => {
+                const isAvailable = overrides[req] !== undefined ?
+                    overrides[req] :
+                    getToolStatus(req);
+
+                if (!isAvailable) {
+                    stageReady = false;
+                    const toolName = getToolName(req);
+                    missingRequirements.push(toolName);
                 }
-            },
-            error: function(xhr, status, error) {
-                console.log('AJAX error updating stages:', error);
-            }
+            });
+
+            updateStageUI(stageKey, stageReady, missingRequirements);
         });
+    }
+
+    function updateStageUI(stageKey, isReady, missingRequirements) {
+        const $stage = $('[data-stage="' + stageKey + '"]');
+        const $title = $stage.find('.stage-title');
+        const $checking = $stage.find('.stage-checking');
+        let $missing = $stage.find('.stage-missing');
+
+        $stage.removeClass('available missing undetermined').addClass(isReady ? 'available' : 'missing');
+        $title.removeClass('available missing undetermined').addClass(isReady ? 'available' : 'missing');
+
+        // Remove checking spinner
+        $checking.remove();
+
+        // Update title with new icon
+        let titleText = $title.text();
+        titleText = titleText.replace(/^[✅❌⏳]\s*/, ''); // Remove existing icons
+        const newIcon = isReady ? '✅' : '❌';
+        $title.text(newIcon + ' ' + titleText);
+
+        if (isReady) {
+            $missing.hide();
+        } else {
+            if (missingRequirements.length > 0) {
+                if ($missing.length === 0) {
+                    // Create missing requirements element if it doesn't exist
+                    $stage.find('.stage-details').append('<p class="stage-missing"><strong>Missing:</strong> <span></span></p>');
+                    $missing = $stage.find('.stage-missing');
+                }
+                $missing.find('span').text(missingRequirements.join(', '));
+                $missing.show();
+            }
+        }
     }
 
     function showUsernameStatus(message, type) {
         const $status = $('#username-status');
         $status.removeClass('success error')
-               .addClass(type)
-               .text(message)
-               .fadeIn();
+            .addClass(type)
+            .text(message)
+            .fadeIn();
     }
 
     function showNotification(message, type) {
@@ -260,15 +308,15 @@ jQuery(document).ready(function($) {
         $('#ctw-admin h1').after($notification);
 
         // Auto-dismiss after 3 seconds
-        setTimeout(function() {
-            $notification.fadeOut(function() {
+        setTimeout(function () {
+            $notification.fadeOut(function () {
                 $(this).remove();
             });
         }, 3000);
 
         // Manual dismiss
-        $notification.find('.notice-dismiss').on('click', function() {
-            $notification.fadeOut(function() {
+        $notification.find('.notice-dismiss').on('click', function () {
+            $notification.fadeOut(function () {
                 $(this).remove();
             });
         });
@@ -276,7 +324,7 @@ jQuery(document).ready(function($) {
 
 
     // Add smooth scrolling for anchor links
-    $('a[href^="#"]').on('click', function(e) {
+    $('a[href^="#"]').on('click', function (e) {
         e.preventDefault();
         const target = $(this.getAttribute('href'));
         if (target.length) {
@@ -287,40 +335,57 @@ jQuery(document).ready(function($) {
     });
 
     function loadRequirementsAsync() {
-        // Load requirements via AJAX after page is rendered
-        $.ajax({
-            url: ctw_ajax.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'ctw_check_requirements',
-                nonce: ctw_ajax.nonce
-            },
-            success: function(response) {
-                if (response.success) {
-                    updateAllSections(response.data);
-                    // Add a small delay to show the tool updates first, then update stages
-                    setTimeout(function() {
-                        updateContributionStages();
-                    }, 500);
+        const promises = [];
+
+        $('.checklist-item').each(function () {
+            const $section = $(this);
+            const sectionKey = $section.data('section');
+
+            promises.push(loadSingleRequirement(sectionKey));
+        });
+
+        Promise.allSettled(promises).then(function () {
+            updateContributionStages();
+        });
+    }
+
+    function loadSingleRequirement(section) {
+        return new Promise(function (resolve, reject) {
+            $.ajax({
+                url: ctw_ajax.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'ctw_check_single_requirement',
+                    section,
+                    nonce: ctw_ajax.nonce,
+                    overrides
+                },
+                success: function (response) {
+                    if (response.success) {
+                        updateSectionUI(section, response.data);
+                        resolve(response.data);
+                    } else {
+                        reject(new Error('Server error'));
+                    }
+                },
+                error: function () {
+                    const $section = $('[data-section="' + section + '"]');
+                    $section.removeClass('loading').addClass('incomplete');
+                    $section.find('.dashicons-update').removeClass('dashicons-update').addClass('dashicons-dismiss');
+                    $section.find('.status-badge.loading').removeClass('loading').addClass('error').text('✗ Error');
+                    reject(new Error('AJAX error'));
                 }
-            },
-            error: function() {
-                console.log('Failed to load requirements');
-                // Show error state for all sections
-                $('.checklist-item.loading').removeClass('loading').addClass('incomplete');
-                $('.checklist-item .dashicons-update').removeClass('dashicons-update').addClass('dashicons-dismiss');
-                $('.status-badge.loading').removeClass('loading').addClass('error').text('✗ Error loading');
-            }
+            });
         });
     }
 
     // Add hover effects for interactive elements
-    $('.status-badge').on('mouseenter', function() {
+    $('.status-badge').on('mouseenter', function () {
         $(this).attr('title', 'Click to refresh this section');
     });
 
     // Keyboard accessibility
-    $('.status-badge').on('keydown', function(e) {
+    $('.status-badge').on('keydown', function (e) {
         if (e.which === 13 || e.which === 32) { // Enter or Space
             e.preventDefault();
             $(this).click();

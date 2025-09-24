@@ -24,11 +24,13 @@ class ContributeToWordPress {
 
     private $sections = array();
     private $platform = null;
+    private $current_overrides = null;
 
     public function __construct() {
         add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
         add_action( 'wp_ajax_ctw_check_requirements', array( $this, 'ajax_check_requirements' ) );
+        add_action( 'wp_ajax_ctw_check_single_requirement', array( $this, 'ajax_check_single_requirement' ) );
         add_action( 'wp_ajax_ctw_verify_username', array( $this, 'ajax_verify_username' ) );
         add_action( 'wp_ajax_ctw_set_platform', array( $this, 'ajax_set_platform' ) );
         add_action( 'wp_ajax_ctw_get_stages', array( $this, 'ajax_get_stages' ) );
@@ -40,6 +42,8 @@ class ContributeToWordPress {
         $this->sections = array(
             'git' => array(
                 'name' => 'Git',
+                'explanation' => 'The version control system',
+                'explanation_link' => 'https://en.wikipedia.org/wiki/Git',
                 'description' => 'Version control system for tracking changes',
                 'check_function' => array( $this, 'check_git' ),
                 'instructions' => $this->get_git_instructions(),
@@ -54,6 +58,8 @@ class ContributeToWordPress {
             ),
             'node' => array(
                 'name' => 'Node.js',
+                'explanation' => 'The JavaScript runtime',
+                'explanation_link' => 'https://en.wikipedia.org/wiki/Node.js',
                 'description' => 'JavaScript runtime for building modern WordPress features',
                 'check_function' => array( $this, 'check_nodejs' ),
                 'instructions' => $this->get_nodejs_instructions(),
@@ -61,6 +67,8 @@ class ContributeToWordPress {
             ),
             'npm' => array(
                 'name' => 'npm',
+                'explanation' => 'The JavaScript package manager',
+                'explanation_link' => 'https://en.wikipedia.org/wiki/Npm_(software)',
                 'description' => 'Package manager for Node.js dependencies',
                 'check_function' => array( $this, 'check_npm' ),
                 'instructions' => $this->get_npm_instructions(),
@@ -69,13 +77,17 @@ class ContributeToWordPress {
             'composer' => array(
                 'name' => 'Composer',
                 'description' => 'PHP dependency manager for WordPress development',
-                'check_function' => array( $this, 'check_composer' ),
+                'explanation' => 'The PHP package manager',
+                'explanation_link' => 'https://en.wikipedia.org/wiki/Composer_(software)',
+               'check_function' => array( $this, 'check_composer' ),
                 'instructions' => $this->get_composer_instructions(),
                 'needed_for' => 'Optional for PHP development to manage dependencies and run WordPress development tools.'
             ),
             'gutenberg' => array(
                 'name' => 'Gutenberg Development version',
                 'description' => 'Gutenberg plugin cloned from GitHub for block development',
+                'explanation' => 'The Block Editor',
+                'explanation_link' => 'https://github.com/WordPress/gutenberg',
                 'check_function' => array( $this, 'check_gutenberg_plugin' ),
                 'instructions' => $this->get_gutenberg_instructions(),
                 'needed_for' => 'Block development happens in the Gutenberg plugin repository.'
@@ -148,7 +160,7 @@ class ContributeToWordPress {
                 <p class="platform-info">
                     <strong>Platform:</strong>
                     <span id="current-platform"><?php echo esc_html( $this->get_platform() ); ?></span>
-                    <a href="#" onclick="showPlatformOverride(); return false;" class="platform-link" id="platform-wrong-link">(Wrong?)</a>
+                    <a href="#" onclick="showPlatformOverride(); return false;" class="platform-link" id="platform-wrong-link">Change</a>
                     <select id="platform-override" onchange="overridePlatform(this.value)" class="platform-select">
                         <option value="">Override...</option>
                         <option value="Windows">Windows</option>
@@ -259,7 +271,7 @@ class ContributeToWordPress {
         }
     }
 
-    private function render_single_stage( $stage_key, $stage, $debug_overrides = array(), $undetermined = false ) {
+    private function render_single_stage( $stage_key, $stage, $overrides = array(), $undetermined = false ) {
         $missing_requirements = array();
         $missing_optional = array();
         $stage_ready = true;
@@ -272,8 +284,8 @@ class ContributeToWordPress {
             // Check required items
             foreach ( $stage['requirements'] as $req ) {
                 // Check debug override first, then real state
-                if ( isset( $debug_overrides[$req] ) ) {
-                    $requirement_met = $debug_overrides[$req];
+                if ( isset( $overrides[$req] ) ) {
+                    $requirement_met = $overrides[$req];
                 } else {
                     $requirement_met = $this->check_requirement( $req );
                 }
@@ -288,8 +300,8 @@ class ContributeToWordPress {
             if ( isset( $stage['optional'] ) ) {
                 foreach ( $stage['optional'] as $opt ) {
                     // Check debug override first, then real state
-                    if ( isset( $debug_overrides[$opt] ) ) {
-                        $requirement_met = $debug_overrides[$opt];
+                    if ( isset( $overrides[$opt] ) ) {
+                        $requirement_met = $overrides[$opt];
                     } else {
                         $requirement_met = $this->check_requirement( $opt );
                     }
@@ -400,6 +412,13 @@ class ContributeToWordPress {
                 <div class="checkbox-wrapper">
                     <span class="dashicons <?php echo esc_attr( $icon_class ); ?>"></span>
                     <strong><?php echo esc_html( $section['name'] ); ?></strong>
+                    <?php if ( ! empty( $section['explanation'] ) ) : ?>
+                        <span>—</span>
+                        <span class="tool-explanation"><?php echo esc_html( $section['explanation'] ); ?></span>
+                        <?php if ( ! empty( $section['explanation_link'] ) ) : ?>
+                            <a href="<?php echo esc_url( $section['explanation_link'] ); ?>" target="_blank" title="More information">?</a>
+                        <?php endif; ?>
+                    <?php endif; ?>
                     <span class="status-badge status-badge-clickable <?php echo esc_attr( $status_badge_class ); ?>"
                           onclick="toggleDebugMode('<?php echo esc_attr( $key ); ?>')"
                           title="Click to toggle debug mode">
@@ -494,6 +513,9 @@ class ContributeToWordPress {
     }
 
     private function get_platform() {
+        if ( isset( $this->current_overrides['platform'] ) ) {
+            return $this->current_overrides['platform'];
+        }
         return $this->detect_platform();
     }
 
@@ -528,10 +550,17 @@ class ContributeToWordPress {
         return $paths;
     }
 
-    private function check_requirement( $key ) {
+    private function check_requirement( $key, $overrides = array() ) {
         if ( ! isset( $this->sections[$key] ) ) {
             return false;
         }
+
+        // Check debug override first
+        if ( isset( $overrides[$key] ) ) {
+            return $overrides[$key];
+        }
+
+        $this->current_overrides = $overrides;
 
         $check_function = $this->sections[$key]['check_function'];
         return call_user_func( $check_function );
@@ -742,51 +771,91 @@ class ContributeToWordPress {
     private function get_plugin_theme_git_repos() {
         $git_repos = array();
 
-        // Check plugins with git repositories
-        if ( ! function_exists( 'get_plugins' ) ) {
-            require_once ABSPATH . 'wp-admin/includes/plugin.php';
-        }
-
-        $all_plugins = get_plugins();
-        foreach ( $all_plugins as $plugin_file => $plugin_data ) {
-            $plugin_dir = dirname( WP_PLUGIN_DIR . '/' . $plugin_file );
-
-            // Skip single-file plugins (they won't have their own directory)
-            if ( $plugin_dir === WP_PLUGIN_DIR ) {
+        // Check plugin directories with git repositories
+        $plugin_dirs = glob( WP_PLUGIN_DIR . '/*', GLOB_ONLYDIR );
+        foreach ( $plugin_dirs as $plugin_dir ) {
+            if ( ! is_dir( $plugin_dir . '/.git' ) ) {
                 continue;
             }
 
-            if ( is_dir( $plugin_dir . '/.git' ) ) {
-                $git_repos[] = array(
-                    'type' => 'plugin',
-                    'name' => $plugin_data['Name'],
-                    'folder' => basename( $plugin_dir ),
-                    'file' => $plugin_file,
-                    'active' => is_plugin_active( $plugin_file ),
-                    'path' => $plugin_dir
-                );
+            $plugin_file = $this->find_main_plugin_file( $plugin_dir );
+            if ( ! $plugin_file ) {
+                continue;
             }
+
+            if ( ! function_exists( 'get_plugin_data' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/plugin.php';
+            }
+
+            $plugin_data = get_plugin_data( $plugin_file, false, false );
+            if ( empty( $plugin_data['Name'] ) ) {
+                continue;
+            }
+
+            $relative_path = basename( $plugin_dir ) . '/' . basename( $plugin_file );
+            $git_repos[] = array(
+                'type' => 'plugin',
+                'name' => $plugin_data['Name'],
+                'folder' => basename( $plugin_dir ),
+                'file' => $relative_path,
+                'active' => is_plugin_active( $relative_path ),
+                'path' => $plugin_dir
+            );
         }
 
-        // Check themes with git repositories
-        $all_themes = wp_get_themes();
+        // Check theme directories with git repositories
+        $theme_dirs = glob( get_theme_root() . '/*', GLOB_ONLYDIR );
         $current_theme = get_stylesheet();
 
-        foreach ( $all_themes as $theme_slug => $theme_obj ) {
-            $theme_dir = $theme_obj->get_stylesheet_directory();
-
-            if ( is_dir( $theme_dir . '/.git' ) ) {
-                $git_repos[] = array(
-                    'type' => 'theme',
-                    'name' => $theme_obj->get( 'Name' ),
-                    'folder' => $theme_slug,
-                    'active' => ( $theme_slug === $current_theme ),
-                    'path' => $theme_dir
-                );
+        foreach ( $theme_dirs as $theme_dir ) {
+            if ( ! is_dir( $theme_dir . '/.git' ) ) {
+                continue;
             }
+
+            $style_css = $theme_dir . '/style.css';
+            if ( ! file_exists( $style_css ) ) {
+                continue;
+            }
+
+            if ( ! function_exists( 'wp_get_theme' ) ) {
+                require_once ABSPATH . 'wp-includes/theme.php';
+            }
+
+            $theme_slug = basename( $theme_dir );
+            $theme_data = wp_get_theme( $theme_slug );
+
+            if ( ! $theme_data->exists() ) {
+                continue;
+            }
+
+            $git_repos[] = array(
+                'type' => 'theme',
+                'name' => $theme_data->get( 'Name' ),
+                'folder' => $theme_slug,
+                'active' => ( $theme_slug === $current_theme ),
+                'path' => $theme_dir
+            );
         }
 
         return $git_repos;
+    }
+
+    private function find_main_plugin_file( $plugin_dir ) {
+        $files = glob( $plugin_dir . '/*.php' );
+
+        foreach ( $files as $file ) {
+            $contents = file_get_contents( $file, false, null, 0, 8192 );
+
+            if ( strpos( $contents, '<?php' ) !== 0 ) {
+                continue;
+            }
+
+            if ( preg_match( '/Plugin Name\s*:\s*(.+)/i', $contents ) ) {
+                return $file;
+            }
+        }
+
+        return false;
     }
 
     // Instruction methods
@@ -914,12 +983,61 @@ class ContributeToWordPress {
     public function ajax_check_requirements() {
         check_ajax_referer( 'ctw_nonce', 'nonce' );
 
+        $overrides = isset( $_POST['overrides'] ) ? $_POST['overrides'] : array();
+
         $results = array();
         foreach ( $this->sections as $key => $section ) {
-            $results[$key] = $this->check_requirement( $key );
+            $results[$key] = $this->check_requirement( $key, $overrides );
         }
 
         wp_send_json_success( $results );
+    }
+
+    public function ajax_check_single_requirement() {
+        check_ajax_referer( 'ctw_nonce', 'nonce' );
+
+        $section_key = sanitize_text_field( $_POST['section'] );
+        $overrides = isset( $_POST['overrides'] ) ? $_POST['overrides'] : array();
+
+        if ( ! isset( $this->sections[$section_key] ) ) {
+            wp_send_json_error( 'Invalid section' );
+        }
+
+        $this->current_overrides = $overrides;
+
+        $result = $this->check_requirement( $section_key, $overrides );
+        $version = $this->get_tool_version( $section_key );
+        $instructions = $this->get_section_instructions( $section_key );
+
+        wp_send_json_success( array(
+            'status' => $result,
+            'version' => $version,
+            'instructions' => $instructions
+        ) );
+    }
+
+    private function get_tool_version( $section_key ) {
+        $check_function = $this->sections[$section_key]['check_function'];
+        $result = call_user_func( $check_function );
+
+        if ( is_string( $result ) ) {
+            return $result;
+        }
+
+        return null;
+    }
+
+    private function get_section_instructions( $section_key ) {
+        if ( ! isset( $this->sections[$section_key]['instructions'] ) ) {
+            return '';
+        }
+
+        $instructions_method = $this->sections[$section_key]['instructions'];
+        if ( is_callable( $instructions_method ) ) {
+            return call_user_func( $instructions_method );
+        }
+
+        return '';
     }
 
     public function ajax_verify_username() {
@@ -957,11 +1075,11 @@ class ContributeToWordPress {
         check_ajax_referer( 'ctw_nonce', 'nonce' );
 
         // Get debug overrides from client
-        $debug_overrides = array();
-        if ( isset( $_POST['debug_overrides'] ) ) {
-            $debug_overrides = json_decode( stripslashes( $_POST['debug_overrides'] ), true );
-            if ( ! is_array( $debug_overrides ) ) {
-                $debug_overrides = array();
+        $overrides = array();
+        if ( isset( $_POST['overrides'] ) ) {
+            $overrides = json_decode( stripslashes( $_POST['overrides'] ), true );
+            if ( ! is_array( $overrides ) ) {
+                $overrides = array();
             }
         }
 
@@ -970,7 +1088,7 @@ class ContributeToWordPress {
 
         foreach ( $stages as $stage_key => $stage ) {
             ob_start();
-            $this->render_single_stage( $stage_key, $stage, $debug_overrides );
+            $this->render_single_stage( $stage_key, $stage, $overrides );
             $stages_html .= ob_get_clean();
         }
 

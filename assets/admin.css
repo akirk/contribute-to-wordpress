@@ -47,7 +47,7 @@
 .checkbox-wrapper {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 5px;
     margin-bottom: 10px;
 }
 
@@ -272,7 +272,7 @@
     background: #f0fff4;
 }
 
-.stage-item.not_ready {
+.stage-item.missing {
     border-color: #d1d5da;
     background: #fafbfc;
 }
@@ -305,7 +305,7 @@
     color: #2ea44f;
 }
 
-.stage-title.not_ready {
+.stage-title.missing {
     color: #586069;
 }
 
@@ -472,10 +472,5 @@
 .stage-item {
     transform: translateY(0);
     transition: all 0.3s ease-in-out;
-}
-
-.stage-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
