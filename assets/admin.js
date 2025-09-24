@@ -84,41 +84,25 @@ jQuery(document).ready(function($) {
     function toggleSectionDebug(section) {
         const $section = $('[data-section="' + section + '"]');
 
+        // Determine current state from DOM
+        const currentlyAvailable = $section.hasClass('complete');
+
         // Check if already in debug mode
         if (debugOverrides.hasOwnProperty(section)) {
             // Toggle the debug state
             debugOverrides[section] = !debugOverrides[section];
-            console.log('Toggled debug state for', section, 'to', debugOverrides[section]);
         } else {
-            // Get current state and set opposite
-            $.ajax({
-                url: ctw_ajax.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'ctw_toggle_debug',
-                    section: section,
-                    nonce: ctw_ajax.nonce
-                },
-                success: function(response) {
-                    if (response.success) {
-                        // Store the debug state
-                        debugOverrides[section] = response.data.available;
-
-                        // Update UI
-                        updateSectionUI(section, response.data.available, response.data.section_data);
-                        updateContributionStages();
-                    }
-                }
-            });
-            return;
+            // First time toggling - set opposite of current state
+            debugOverrides[section] = !currentlyAvailable;
         }
 
-        // Update UI with current debug state
+        console.log('Toggled debug state for', section, 'to', debugOverrides[section]);
+
+        // Update UI instantly with debug state
         updateSectionUI(section, debugOverrides[section]);
 
-        // Always update stages after toggling
+        // Update stages instantly
         updateContributionStages();
-
     }
 
 

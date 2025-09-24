@@ -259,3 +259,157 @@
     100% { left: 100%; }
 }
 
+/* Stage specific styles */
+.stage-item {
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 15px;
+    border: 2px solid;
+}
+
+.stage-item.available {
+    border-color: #2ea44f;
+    background: #f0fff4;
+}
+
+.stage-item.not_ready {
+    border-color: #d1d5da;
+    background: #fafbfc;
+}
+
+.stage-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.stage-icon {
+    font-size: 24px;
+}
+
+.stage-details {
+    flex: 1;
+}
+
+.stage-title {
+    margin: 0;
+    font-size: 18px;
+}
+
+.stage-title.available {
+    color: #2ea44f;
+}
+
+.stage-title.not_ready {
+    color: #586069;
+}
+
+.stage-description {
+    margin: 5px 0;
+    color: #586069;
+}
+
+.stage-missing {
+    margin: 10px 0 0 0;
+    color: #d73a49;
+    font-size: 14px;
+}
+
+.stage-optional {
+    margin: 10px 0 0 0;
+    color: #e36209;
+    font-size: 14px;
+}
+
+.git-repos-section {
+    margin: 15px 0 0 0;
+    padding: 10px;
+    background: #f0f6fc;
+    border-radius: 4px;
+    border-left: 3px solid #2ea44f;
+}
+
+.git-repos-title {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: bold;
+    color: #2ea44f;
+}
+
+.git-repos-details {
+    margin: 8px 0;
+}
+
+.git-repos-summary {
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.git-repos-summary.active {
+    color: #2ea44f;
+}
+
+.git-repos-summary.inactive {
+    color: #586069;
+}
+
+.git-repos-list {
+    margin: 8px 0 0 0;
+    padding-left: 20px;
+    font-size: 14px;
+    color: #32373c;
+}
+
+.git-repos-item {
+    margin: 2px 0;
+}
+
+.platform-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.platform-link {
+    font-size: 12px;
+    text-decoration: none;
+    color: #646970;
+}
+
+.platform-select {
+    font-size: 12px;
+    padding: 2px 5px;
+    display: none;
+}
+
+.username-link {
+    margin-left: 10px;
+    font-size: 12px;
+    text-decoration: none;
+    color: #646970;
+}
+
+.cancel-button {
+    margin-left: 5px;
+}
+
+.instructions-section {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    border-left: 3px solid #007cba;
+}
+
+.instructions-text {
+    margin: 0;
+    font-size: 14px;
+    color: #32373c;
+}
+
+.status-badge-clickable {
+    cursor: pointer;
+}
+

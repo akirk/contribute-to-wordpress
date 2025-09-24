@@ -2,9 +2,9 @@
 /**
  * Plugin Name: Contribute to WordPress
  * Plugin URI: https://github.com/wordpress/wordpress-develop
- * Description: A plugin to help users set up their development environment for contributing to WordPress core.
+ * Description: Helps you setup your development environment for contributing to WordPress.
  * Version: 1.0.0
- * Author: WordPress Community
+ * Author: WordPress Contributors
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: contribute-to-wordpress
@@ -23,13 +23,13 @@ define( 'CTW_VERSION', '1.0.0' );
 class ContributeToWordPress {
 
     private $sections = array();
+    private $platform = null;
 
     public function __construct() {
         add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
         add_action( 'wp_ajax_ctw_check_requirements', array( $this, 'ajax_check_requirements' ) );
         add_action( 'wp_ajax_ctw_verify_username', array( $this, 'ajax_verify_username' ) );
-        add_action( 'wp_ajax_ctw_toggle_debug', array( $this, 'ajax_toggle_debug' ) );
         add_action( 'wp_ajax_ctw_set_platform', array( $this, 'ajax_set_platform' ) );
         add_action( 'wp_ajax_ctw_get_stages', array( $this, 'ajax_get_stages' ) );
 
@@ -57,21 +57,35 @@ class ContributeToWordPress {
                 'description' => 'JavaScript runtime for building modern WordPress features',
                 'check_function' => array( $this, 'check_nodejs' ),
                 'instructions' => $this->get_nodejs_instructions(),
-                'needed_for' => 'Required for Block development to build and test Gutenberg blocks and modern JavaScript features.'
+                'needed_for' => 'Required for Core Asset Building and Block development to build and test JavaScript features, compile CSS/JS assets, and develop Gutenberg blocks.'
             ),
             'npm' => array(
                 'name' => 'npm',
                 'description' => 'Package manager for Node.js dependencies',
                 'check_function' => array( $this, 'check_npm' ),
                 'instructions' => $this->get_npm_instructions(),
-                'needed_for' => 'Required for Block development to install and manage JavaScript packages and build tools.'
+                'needed_for' => 'Required for Core Asset Building and Block development to install and manage JavaScript packages and build tools for WordPress core assets.'
+            ),
+            'composer' => array(
+                'name' => 'Composer',
+                'description' => 'PHP dependency manager for WordPress development',
+                'check_function' => array( $this, 'check_composer' ),
+                'instructions' => $this->get_composer_instructions(),
+                'needed_for' => 'Optional for PHP development to manage dependencies and run WordPress development tools.'
             ),
             'gutenberg' => array(
-                'name' => 'Gutenberg Plugin',
-                'description' => 'Latest Gutenberg features for block development',
+                'name' => 'Gutenberg Development version',
+                'description' => 'Gutenberg plugin cloned from GitHub for block development',
                 'check_function' => array( $this, 'check_gutenberg_plugin' ),
                 'instructions' => $this->get_gutenberg_instructions(),
                 'needed_for' => 'Block development happens in the Gutenberg plugin repository.'
+            ),
+            'plugin_theme_git' => array(
+                'name' => 'Plugin and Theme Development',
+                'description' => 'At least one plugin or theme under git version control',
+                'check_function' => array( $this, 'check_plugin_theme_git' ),
+                'instructions' => $this->get_plugin_theme_git_instructions(),
+                'needed_for' => 'Git-managed plugins and themes enable proper version control, collaboration, and contribution workflows for WordPress development.'
             ),
             'wporg_account' => array(
                 'name' => 'WordPress.org Account',
@@ -129,11 +143,11 @@ class ContributeToWordPress {
             <!-- Development Environment Status -->
             <div class="checklist-section">
                 <h2>💻 Development Environment</h2>
-                <p style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <p class="platform-info">
                     <strong>Platform:</strong>
                     <span id="current-platform"><?php echo esc_html( $this->get_platform() ); ?></span>
-                    <a href="#" onclick="showPlatformOverride(); return false;" style="font-size: 12px; text-decoration: none; color: #646970;" id="platform-wrong-link">(Wrong?)</a>
-                    <select id="platform-override" onchange="overridePlatform(this.value)" style="font-size: 12px; padding: 2px 5px; display: none;">
+                    <a href="#" onclick="showPlatformOverride(); return false;" class="platform-link" id="platform-wrong-link">(Wrong?)</a>
+                    <select id="platform-override" onchange="overridePlatform(this.value)" class="platform-select">
                         <option value="">Override...</option>
                         <option value="Windows">Windows</option>
                         <option value="macOS">macOS</option>
@@ -158,7 +172,7 @@ class ContributeToWordPress {
                             <?php echo $wporg_username ? '✓ Set: ' . esc_html( $wporg_username ) : '✗ Not Set'; ?>
                         </span>
                         <?php if ( $wporg_username ) : ?>
-                            <a href="#" onclick="editUsername(); return false;" style="margin-left: 10px; font-size: 12px; text-decoration: none; color: #646970;" id="edit-username-link">(Change)</a>
+                            <a href="#" onclick="editUsername(); return false;" class="username-link" id="edit-username-link">(Change)</a>
                         <?php endif; ?>
                     </div>
 
@@ -172,7 +186,7 @@ class ContributeToWordPress {
                                         <?php echo $wporg_username ? 'Update Username' : 'Verify & Save Username'; ?>
                                     </button>
                                     <?php if ( $wporg_username ) : ?>
-                                        <button type="button" id="cancel-edit" class="button" style="margin-left: 5px;">Cancel</button>
+                                        <button type="button" id="cancel-edit" class="button cancel-button">Cancel</button>
                                     <?php endif; ?>
                                     <div id="username-status"></div>
                                     <p class="description">
@@ -195,25 +209,38 @@ class ContributeToWordPress {
     private function get_stages_data() {
         return array(
             'web' => array(
-                'title' => 'Stage 1: GitHub Web Interface Contributions',
+                'title' => 'GitHub Web Interface Contributions',
                 'description' => 'Edit files directly on GitHub without local development setup',
                 'icon' => '🌐',
                 'requirements' => array()
             ),
             'php' => array(
-                'title' => 'Stage 2: PHP Core Development',
+                'title' => 'PHP Core Development',
                 'description' => 'Contribute to WordPress core PHP code, themes, and backend functionality',
                 'icon' => '⚙️',
-                'requirements' => array( 'git', 'wp_repo' )
+                'requirements' => array( 'git', 'wp_repo' ),
+                'optional' => array( 'composer' )
+            ),
+            'assets' => array(
+                'title' => 'Core Asset Building',
+                'description' => 'Build and compile WordPress core CSS, JavaScript, and other frontend assets',
+                'icon' => '🎨',
+                'requirements' => array( 'git', 'wp_repo', 'node', 'npm' )
             ),
             'blocks' => array(
-                'title' => 'Stage 3: Block Development',
+                'title' => 'Block Development',
                 'description' => 'Contribute to Gutenberg blocks and modern WordPress JavaScript development',
                 'icon' => '🧱',
                 'requirements' => array( 'git', 'wp_repo', 'node', 'npm', 'gutenberg' )
             ),
+            'plugins_themes' => array(
+                'title' => 'Plugin & Theme Development',
+                'description' => 'Develop and contribute to WordPress plugins and themes using git version control',
+                'icon' => '🔌',
+                'requirements' => array( 'git', 'plugin_theme_git' )
+            ),
             'contribute' => array(
-                'title' => 'Stage 4: Contribute Back',
+                'title' => 'Contribute Back',
                 'description' => 'Submit patches, create tickets, and participate in the WordPress community',
                 'icon' => '🚀',
                 'requirements' => array( 'wporg_account' )
@@ -229,38 +256,113 @@ class ContributeToWordPress {
         }
     }
 
-    private function render_single_stage( $stage_key, $stage ) {
+    private function render_single_stage( $stage_key, $stage, $debug_overrides = array() ) {
         $missing_requirements = array();
+        $missing_optional = array();
         $stage_ready = true;
 
+        // Check required items
         foreach ( $stage['requirements'] as $req ) {
-            if ( ! $this->check_requirement( $req ) ) {
+            // Check debug override first, then real state
+            if ( isset( $debug_overrides[$req] ) ) {
+                $requirement_met = $debug_overrides[$req];
+            } else {
+                $requirement_met = $this->check_requirement( $req );
+            }
+
+            if ( ! $requirement_met ) {
                 $missing_requirements[] = $this->sections[$req]['name'];
                 $stage_ready = false;
             }
         }
 
+        // Check optional items
+        if ( isset( $stage['optional'] ) ) {
+            foreach ( $stage['optional'] as $opt ) {
+                // Check debug override first, then real state
+                if ( isset( $debug_overrides[$opt] ) ) {
+                    $requirement_met = $debug_overrides[$opt];
+                } else {
+                    $requirement_met = $this->check_requirement( $opt );
+                }
+
+                if ( ! $requirement_met ) {
+                    $missing_optional[] = $this->sections[$opt]['name'];
+                }
+            }
+        }
+
         $status_class = $stage_ready ? 'available' : 'not_ready';
         $status_icon = $stage_ready ? '✅' : '⭕';
-        $border_color = $stage_ready ? '#2ea44f' : '#d1d5da';
-        $bg_color = $stage_ready ? '#f0fff4' : '#fafbfc';
-        $text_color = $stage_ready ? '#2ea44f' : '#586069';
 
         ?>
-        <div class="stage-item <?php echo esc_attr( $status_class ); ?>" data-stage="<?php echo esc_attr( $stage_key ); ?>"
-             style="border: 2px solid <?php echo esc_attr( $border_color ); ?>; border-radius: 6px; padding: 20px; margin-bottom: 15px; background: <?php echo esc_attr( $bg_color ); ?>;">
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <div style="font-size: 24px;"><?php echo esc_html( $stage['icon'] ); ?></div>
-                <div style="flex: 1;">
-                    <h3 style="margin: 0; font-size: 18px; color: <?php echo esc_attr( $text_color ); ?>;">
+        <div class="stage-item <?php echo esc_attr( $status_class ); ?>" data-stage="<?php echo esc_attr( $stage_key ); ?>">
+            <div class="stage-content">
+                <div class="stage-icon"><?php echo esc_html( $stage['icon'] ); ?></div>
+                <div class="stage-details">
+                    <h3 class="stage-title <?php echo esc_attr( $status_class ); ?>">
                         <?php echo esc_html( $status_icon . ' ' . $stage['title'] ); ?>
                     </h3>
-                    <p style="margin: 5px 0; color: #586069;"><?php echo esc_html( $stage['description'] ); ?></p>
+                    <p class="stage-description"><?php echo esc_html( $stage['description'] ); ?></p>
 
                     <?php if ( ! $stage_ready && ! empty( $missing_requirements ) ) : ?>
-                        <p style="margin: 10px 0 0 0; color: #d73a49; font-size: 14px;">
+                        <p class="stage-missing">
                             <strong>Missing:</strong> <?php echo esc_html( implode( ', ', $missing_requirements ) ); ?>
                         </p>
+                    <?php endif; ?>
+
+                    <?php if ( ! empty( $missing_optional ) ) : ?>
+                        <p class="stage-optional">
+                            <strong>Optional:</strong> <?php echo esc_html( implode( ', ', $missing_optional ) ); ?> (recommended but not required)
+                        </p>
+                    <?php endif; ?>
+
+                    <?php if ( $stage_key === 'plugins_themes' && $stage_ready ) : ?>
+                        <?php
+                        $git_repos = $this->get_plugin_theme_git_repos();
+                        if ( ! empty( $git_repos ) ) :
+                        ?>
+                            <div class="git-repos-section">
+                                <p class="git-repos-title">Ready for development:</p>
+
+                                <?php
+                                $active_repos = array_filter( $git_repos, function( $repo ) { return $repo['active']; } );
+                                $inactive_repos = array_filter( $git_repos, function( $repo ) { return ! $repo['active']; } );
+                                ?>
+
+                                <?php if ( ! empty( $active_repos ) ) : ?>
+                                    <details open class="git-repos-details">
+                                        <summary class="git-repos-summary active">
+                                            Active (<?php echo count( $active_repos ); ?>)
+                                        </summary>
+                                        <ul class="git-repos-list">
+                                            <?php foreach ( $active_repos as $repo ) : ?>
+                                                <li class="git-repos-item">
+                                                    <strong><?php echo esc_html( ucfirst( $repo['type'] ) ); ?>:</strong>
+                                                    <?php echo esc_html( $repo['name'] ); ?>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </details>
+                                <?php endif; ?>
+
+                                <?php if ( ! empty( $inactive_repos ) ) : ?>
+                                    <details class="git-repos-details">
+                                        <summary class="git-repos-summary inactive">
+                                            Inactive (<?php echo count( $inactive_repos ); ?>)
+                                        </summary>
+                                        <ul class="git-repos-list">
+                                            <?php foreach ( $inactive_repos as $repo ) : ?>
+                                                <li class="git-repos-item">
+                                                    <strong><?php echo esc_html( ucfirst( $repo['type'] ) ); ?>:</strong>
+                                                    <?php echo esc_html( $repo['name'] ); ?>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </details>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>
@@ -289,9 +391,8 @@ class ContributeToWordPress {
                 <div class="checkbox-wrapper">
                     <span class="dashicons <?php echo esc_attr( $icon_class ); ?>"></span>
                     <strong><?php echo esc_html( $section['name'] ); ?></strong>
-                    <span class="status-badge <?php echo esc_attr( $status_badge_class ); ?>"
+                    <span class="status-badge status-badge-clickable <?php echo esc_attr( $status_badge_class ); ?>"
                           onclick="toggleDebugMode('<?php echo esc_attr( $key ); ?>')"
-                          style="cursor: pointer;"
                           title="Click to toggle debug mode">
                         <?php echo esc_html( $status_text ); ?>
                     </span>
@@ -299,25 +400,13 @@ class ContributeToWordPress {
 
                 <?php if ( ! $is_available ) : ?>
                     <div class="instructions" id="instructions-<?php echo esc_attr( $key ); ?>">
-                        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-bottom: 15px; border-left: 3px solid #007cba;">
-                            <p style="margin: 0; font-size: 14px; color: #32373c;">
+                        <div class="instructions-section">
+                            <p class="instructions-text">
                                 <strong>Why you need this:</strong> <?php echo esc_html( $section['needed_for'] ); ?>
                             </p>
                         </div>
 
-                        <?php if ( $key === 'gutenberg' ) : ?>
-                            <?php if ( current_user_can( 'install_plugins' ) ) : ?>
-                                <p>
-                                    <a href="<?php echo esc_url( admin_url( 'plugin-install.php?tab=plugin-information&plugin=gutenberg&TB_iframe=true&width=600&height=550' ) ); ?>"
-                                       class="thickbox button button-primary">Install Gutenberg Plugin</a>
-                                </p>
-                                <p class="description">This will open the plugin installer. After installation, make sure to activate the plugin.</p>
-                            <?php else : ?>
-                                <?php echo wp_kses_post( $section['instructions'] ); ?>
-                            <?php endif; ?>
-                        <?php else : ?>
-                            <?php echo wp_kses_post( $section['instructions'] ); ?>
-                        <?php endif; ?>
+                        <?php echo wp_kses_post( $section['instructions'] ); ?>
                     </div>
                 <?php endif; ?>
             </div>
@@ -366,32 +455,33 @@ class ContributeToWordPress {
         <?php
     }
 
-
-    // Environment detection methods
     private function detect_platform() {
-        // Use PHP_OS for initial detection
-        $os = strtolower( PHP_OS );
+        if ( ! $this->platform ) {
+            $os = strtolower( PHP_OS );
 
-        if ( strpos( $os, 'win' ) !== false || PHP_OS_FAMILY === 'Windows' ) {
-            return 'Windows';
-        } elseif ( strpos( $os, 'darwin' ) !== false || PHP_OS_FAMILY === 'Darwin' ) {
-            return 'macOS';
-        } else {
-            // For Linux/Unix, try to get more info with uname to detect containerized environments
-            $uname = shell_exec( 'uname -a 2>/dev/null' );
-            if ( $uname ) {
-                $uname_lower = strtolower( $uname );
-                // Check for macOS indicators in uname output (for Docker/containers running on macOS)
-                if ( strpos( $uname_lower, 'darwin' ) !== false ) {
-                    return 'macOS';
-                }
-                // Check for Windows indicators (WSL, etc.)
-                if ( strpos( $uname_lower, 'microsoft' ) !== false || strpos( $uname_lower, 'wsl' ) !== false ) {
-                    return 'Windows';
+            if ( strpos( $os, 'win' ) !== false || PHP_OS_FAMILY === 'Windows' ) {
+                $this->platform = 'Windows';
+            } elseif ( strpos( $os, 'darwin' ) !== false || PHP_OS_FAMILY === 'Darwin' ) {
+                $this->platform =  'macOS';
+            } else {
+                // For Linux/Unix, try to get more info with uname to detect containerized environments
+                $uname = shell_exec( 'uname -a 2>/dev/null' );
+                if ( $uname ) {
+                    $uname_lower = strtolower( $uname );
+                    // Check for macOS indicators in uname output (for Docker/containers running on macOS)
+                    if ( strpos( $uname_lower, 'darwin' ) !== false ) {
+                        $this->platform =  'macOS';
+                    } elseif ( strpos( $uname_lower, 'microsoft' ) !== false || strpos( $uname_lower, 'wsl' ) !== false ) {
+                        $this->platform =  'Windows';
+                    }
                 }
             }
-            return 'Linux';
+            if ( ! $this->platform ) {
+                $this->platform =  'Linux';
+            }
         }
+
+        return $this->platform;
     }
 
     private function get_platform() {
@@ -429,139 +519,6 @@ class ContributeToWordPress {
         return $paths;
     }
 
-    private function find_node_executable() {
-        $platform = $this->get_platform();
-        $paths = $this->get_common_executable_paths();
-
-        // Add Node.js specific paths
-        if ( $platform === 'macOS' ) {
-            $paths[] = '/usr/local/opt/node/bin';     // Homebrew linked
-        } elseif ( $platform === 'Linux' ) {
-            $paths[] = '/opt/node/bin';
-        } elseif ( $platform === 'Windows' ) {
-            $paths[] = 'C:\\Program Files\\nodejs';
-            $paths[] = 'C:\\Program Files (x86)\\nodejs';
-            $paths[] = 'C:\\nodejs';
-        }
-
-        // Add NVM paths for Unix-like systems - search common user directories
-        if ( $platform === 'macOS' || $platform === 'Linux' ) {
-            $base_dirs = array();
-            if ( $platform === 'macOS' ) {
-                // Common user directories on macOS
-                $base_dirs = glob( '/Users/*', GLOB_ONLYDIR );
-            } else {
-                // Common user directories on Linux
-                $base_dirs = glob( '/home/*', GLOB_ONLYDIR );
-            }
-
-            foreach ( $base_dirs as $user_dir ) {
-                $nvm_paths = glob( $user_dir . '/.nvm/versions/node/*/bin' );
-                if ( $nvm_paths ) {
-                    $paths = array_merge( $paths, $nvm_paths );
-                }
-            }
-        }
-
-        return $this->find_executable_in_paths( 'node', $paths );
-    }
-
-    private function find_npm_executable() {
-        $platform = $this->get_platform();
-        $paths = $this->get_common_executable_paths();
-
-        // Add npm specific paths (usually same as Node.js)
-        if ( $platform === 'macOS' ) {
-            $paths[] = '/usr/local/opt/node/bin';     // Homebrew linked
-        } elseif ( $platform === 'Linux' ) {
-            $paths[] = '/opt/node/bin';
-        } elseif ( $platform === 'Windows' ) {
-            $paths[] = 'C:\\Program Files\\nodejs';
-            $paths[] = 'C:\\Program Files (x86)\\nodejs';
-            $paths[] = 'C:\\nodejs';
-        }
-
-        // Add NVM paths for Unix-like systems - search common user directories
-        if ( $platform === 'macOS' || $platform === 'Linux' ) {
-            $base_dirs = array();
-            if ( $platform === 'macOS' ) {
-                // Common user directories on macOS
-                $base_dirs = glob( '/Users/*', GLOB_ONLYDIR );
-            } else {
-                // Common user directories on Linux
-                $base_dirs = glob( '/home/*', GLOB_ONLYDIR );
-            }
-
-            foreach ( $base_dirs as $user_dir ) {
-                $nvm_paths = glob( $user_dir . '/.nvm/versions/node/*/bin' );
-                if ( $nvm_paths ) {
-                    $paths = array_merge( $paths, $nvm_paths );
-                }
-            }
-        }
-
-        return $this->find_executable_in_paths( 'npm', $paths );
-    }
-
-    private function find_git_executable() {
-        $platform = $this->get_platform();
-        $paths = $this->get_common_executable_paths();
-
-        // Add Git specific paths
-        if ( $platform === 'Windows' ) {
-            $paths[] = 'C:\\Program Files\\Git\\bin';
-            $paths[] = 'C:\\Program Files (x86)\\Git\\bin';
-        }
-
-        return $this->find_executable_in_paths( 'git', $paths );
-    }
-
-    private function find_executable_in_paths( $executable_name, $search_paths ) {
-        $platform = $this->get_platform();
-
-        // Add appropriate extension for Windows
-        if ( $platform === 'Windows' ) {
-            if ( $executable_name === 'npm' ) {
-                $executable_name .= '.cmd';
-            } else {
-                $executable_name .= '.exe';
-            }
-        }
-
-        foreach ( $search_paths as $dir ) {
-            $full_path = rtrim( $dir, '/' ) . '/' . $executable_name;
-            if ( $platform === 'Windows' ) {
-                $full_path = rtrim( $dir, '\\' ) . '\\' . $executable_name;
-            }
-
-            if ( file_exists( $full_path ) && is_executable( $full_path ) ) {
-                // Resolve symlinks to get the actual executable
-                $real_path = realpath( $full_path );
-                return $real_path ? $real_path : $full_path;
-            }
-        }
-
-        return false;
-    }
-
-    private function get_node_common_paths() {
-        $paths = array();
-        $executable_path = $this->find_node_executable();
-        if ( $executable_path ) {
-            $paths[] = $executable_path;
-        }
-        return $paths;
-    }
-
-    private function get_npm_common_paths() {
-        $paths = array();
-        $executable_path = $this->find_npm_executable();
-        if ( $executable_path ) {
-            $paths[] = $executable_path;
-        }
-        return $paths;
-    }
-
     private function check_requirement( $key ) {
         if ( ! isset( $this->sections[$key] ) ) {
             return false;
@@ -571,50 +528,57 @@ class ContributeToWordPress {
         return call_user_func( $check_function );
     }
 
-    private function check_git() {
-        return $this->check_tool_with_enhanced_path( 'git', 'git version' );
-    }
+    private function check_tool( $tool_name, $additional_paths = array() ) {
+        static $search_paths, $shell_paths;
+        if ( ! isset( $search_paths ) ) {
+            $search_paths = $this->get_common_executable_paths();
+        }
+        if ( ! isset( $shell_paths ) ) {
+            $shell_paths = $this->get_paths_from_shell_configs();
+        }
+        $search_paths = array_unique( array_merge( $search_paths, $shell_paths, $additional_paths ) );
 
-    private function check_nodejs() {
-        return $this->check_tool_with_enhanced_path( 'node', 'v' );
-    }
+        $path = null;
+        $version = null;
+        $note = null;
 
-    private function check_tool_with_enhanced_path( $tool_name, $version_prefix ) {
-        // Build comprehensive PATH with all possible installation locations
-        $enhanced_paths = array(
-            '/opt/homebrew/bin',           // Homebrew Apple Silicon
-            '/usr/local/bin',              // Homebrew Intel
-            '/usr/bin',                    // System
-            '/opt/local/bin',              // MacPorts
-            '/usr/local/opt/node/bin',     // Homebrew linked Node.js
-            '/usr/local/opt/git/bin'       // Homebrew linked Git
-        );
+        $enhanced_path = implode( ':', array_unique( $search_paths ) ) . ':' . getenv( 'PATH' );
+        $output = shell_exec( "PATH='$enhanced_path' $tool_name --version 2>&1" );
 
-        // Add paths from shell configs
-        $shell_paths = $this->get_paths_from_shell_configs();
-        $enhanced_paths = array_merge( $enhanced_paths, $shell_paths );
+        if ( $output ) {
+            $version = $this->extract_semver( trim( $output ) );
+        } else {
+            return false;
+        }
 
-        // Add all possible NVM paths
-        $user_dirs = glob( '/Users/*', GLOB_ONLYDIR );
-        if ( $user_dirs ) {
-            foreach ( $user_dirs as $user_dir ) {
-                $nvm_paths = glob( $user_dir . '/.nvm/versions/node/*/bin' );
-                if ( $nvm_paths ) {
-                    $enhanced_paths = array_merge( $enhanced_paths, $nvm_paths );
+        foreach ( $search_paths as $search_path ) {
+            $full_path = rtrim( $search_path, '/' ) . '/' . $tool_name;
+            if ( file_exists( $full_path ) && is_executable( $full_path ) ) {
+               $path = $full_path;
+               break;
+           }
+        }
+
+        if ( ! $path ) {
+            foreach ( $search_paths as $search_path ) {
+                $output = shell_exec( "PATH='$search_path' $tool_name --version 2>&1" );
+                if ( $output ) {
+                    $path = $search_path;
+                    $this->platform = 'WordPress Studio';
+                    break;
                 }
             }
         }
 
-        // Build enhanced PATH
-        $enhanced_path = implode( ':', array_unique( $enhanced_paths ) ) . ':' . getenv( 'PATH' );
 
-        // Try with enhanced PATH
-        $output = shell_exec( "PATH='$enhanced_path' $tool_name --version 2>&1" );
+        return compact( 'path', 'version', 'note' );
+    }
 
-        if ( $output && strpos( trim( $output ), $version_prefix ) === 0 ) {
-            return trim( $output ); // Return version string for display
+    private function extract_semver( $version_output ) {
+        // Extract semantic version (major.minor.patch) from various tool outputs
+        if ( preg_match( '/(\d+\.\d+\.\d+)/', $version_output, $matches ) ) {
+            return $matches[1];
         }
-
         return false;
     }
 
@@ -673,41 +637,147 @@ class ContributeToWordPress {
         return array_unique( $paths );
     }
 
+    private function check_git() {
+        $result = $this->check_tool( 'git' );
+        return $result ? 'Git ' . $result['version'] : false;
+    }
+
+    private function check_nodejs() {
+        $nvm_paths = array();
+
+        $user_dirs = glob( '/Users/*', GLOB_ONLYDIR );
+        if ( $user_dirs ) {
+            foreach ( $user_dirs as $user_dir ) {
+                $paths = glob( $user_dir . '/.nvm/versions/node/*/bin' );
+                if ( $paths ) {
+                    $nvm_paths = array_merge( $nvm_paths, $paths );
+                }
+            }
+        }
+
+        $result = $this->check_tool( 'node', $nvm_paths );
+        return $result ? 'Node.js ' . $result['version'] : false;
+    }
+
     private function check_npm() {
-        $result = $this->check_tool_with_enhanced_path( 'npm', '' );
-        // NPM version starts with a number, not a letter like node's 'v'
-        return $result && is_numeric( trim( $result )[0] ) ? $result : false;
+        $nvm_paths = array();
+
+        $user_dirs = glob( '/Users/*', GLOB_ONLYDIR );
+        if ( $user_dirs ) {
+            foreach ( $user_dirs as $user_dir ) {
+                $paths = glob( $user_dir . '/.nvm/versions/node/*/bin' );
+                if ( $paths ) {
+                    $nvm_paths = array_merge( $nvm_paths, $paths );
+                }
+            }
+        }
+
+        $result = $this->check_tool( 'npm', $nvm_paths );
+        return $result ? 'npm ' . $result['version'] : false;
+    }
+
+    private function check_composer() {
+        $result = $this->check_tool( 'composer' );
+        return $result ? 'Composer ' . $result['version'] : false;
     }
 
     private function check_gutenberg_plugin() {
-        return is_plugin_active( 'gutenberg/gutenberg.php' );
-    }
+        $git_repos = $this->get_plugin_theme_git_repos();
 
-    private function check_git_repository() {
-        return is_dir( ABSPATH . '.git' ) || is_file( ABSPATH . '.git' );
+        // Look for Gutenberg in the git repositories
+        foreach ( $git_repos as $repo ) {
+            if ( $repo['type'] === 'plugin' && $repo['folder'] === 'gutenberg' ) {
+                return $repo['active'] ? 'Gutenberg git repository (Active)' : 'Gutenberg git repository (Inactive)';
+            }
+        }
+
+        return false;
     }
 
     private function check_wordpress_repository() {
-        if ( ! $this->check_git_repository() ) {
-            return false;
+        $has__index = false;
+        $has_index_marker = false;
+
+        if ( file_exists( ABSPATH . '_index.php' ) ) {
+            $has__index = true;
         }
 
-        // Check if this is the WordPress develop repository
-        $output = shell_exec( 'cd ' . ABSPATH . ' && git remote get-url origin 2>&1' );
-        $is_wp_repo = $output && ( strpos( $output, 'wordpress-develop' ) !== false || strpos( $output, 'WordPress/wordpress-develop' ) !== false );
-
-        if ( ! $is_wp_repo ) {
-            return false;
+        $index_file = ABSPATH . 'index.php';
+        if ( file_exists( $index_file ) ) {
+            $content = file_get_contents( $index_file );
+            if ( $content && strpos( $content, 'Note: this file exists only to remind developers to build the assets' ) !== false ) {
+                $has_index_marker = true;
+            }
         }
 
-        // Verify the /src directory exists (important for WordPress core development)
-        $src_path = ABSPATH . 'src';
-        return is_dir( $src_path );
+        // We need both indicators to confirm this is the WordPress develop repository
+        return $has__index && $has_index_marker;
     }
 
     private function check_wporg_account() {
         $username = get_user_meta( get_current_user_id(), 'ctw_wporg_username', true );
         return ! empty( $username );
+    }
+
+    private function check_plugin_theme_git() {
+        $git_repos = $this->get_plugin_theme_git_repos();
+
+        if ( ! empty( $git_repos ) ) {
+            $count = count( $git_repos );
+            return $count . ' git ' . ( $count === 1 ? 'repository' : 'repositories' );
+        }
+
+        return false;
+    }
+
+    private function get_plugin_theme_git_repos() {
+        $git_repos = array();
+
+        // Check plugins with git repositories
+        if ( ! function_exists( 'get_plugins' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $all_plugins = get_plugins();
+        foreach ( $all_plugins as $plugin_file => $plugin_data ) {
+            $plugin_dir = dirname( WP_PLUGIN_DIR . '/' . $plugin_file );
+
+            // Skip single-file plugins (they won't have their own directory)
+            if ( $plugin_dir === WP_PLUGIN_DIR ) {
+                continue;
+            }
+
+            if ( is_dir( $plugin_dir . '/.git' ) ) {
+                $git_repos[] = array(
+                    'type' => 'plugin',
+                    'name' => $plugin_data['Name'],
+                    'folder' => basename( $plugin_dir ),
+                    'file' => $plugin_file,
+                    'active' => is_plugin_active( $plugin_file ),
+                    'path' => $plugin_dir
+                );
+            }
+        }
+
+        // Check themes with git repositories
+        $all_themes = wp_get_themes();
+        $current_theme = get_stylesheet();
+
+        foreach ( $all_themes as $theme_slug => $theme_obj ) {
+            $theme_dir = $theme_obj->get_stylesheet_directory();
+
+            if ( is_dir( $theme_dir . '/.git' ) ) {
+                $git_repos[] = array(
+                    'type' => 'theme',
+                    'name' => $theme_obj->get( 'Name' ),
+                    'folder' => $theme_slug,
+                    'active' => ( $theme_slug === $current_theme ),
+                    'path' => $theme_dir
+                );
+            }
+        }
+
+        return $git_repos;
     }
 
     // Instruction methods
@@ -757,14 +827,45 @@ class ContributeToWordPress {
                 </ol>';
     }
 
+    private function get_composer_instructions() {
+        $platform = $this->get_platform();
+
+        switch ( $platform ) {
+            case 'Windows':
+                return '<p><strong>Install Composer on Windows:</strong></p>
+                        <ol>
+                            <li>Download Composer installer from <a href="https://getcomposer.org/download/" target="_blank">getcomposer.org</a></li>
+                            <li>Run the installer and follow the setup wizard</li>
+                            <li>Verify installation: <code>composer --version</code></li>
+                        </ol>';
+            case 'macOS':
+                return '<p><strong>Install Composer on macOS:</strong></p>
+                        <ol>
+                            <li>Install via Homebrew: <code>brew install composer</code></li>
+                            <li>Or download from <a href="https://getcomposer.org/download/" target="_blank">getcomposer.org</a></li>
+                            <li>Verify installation: <code>composer --version</code></li>
+                        </ol>';
+            default:
+                return '<p><strong>Install Composer on Linux:</strong></p>
+                        <ol>
+                            <li>Download and install: <code>curl -sS https://getcomposer.org/installer | php</code></li>
+                            <li>Move to global location: <code>sudo mv composer.phar /usr/local/bin/composer</code></li>
+                            <li>Verify installation: <code>composer --version</code></li>
+                        </ol>';
+        }
+    }
+
     private function get_gutenberg_instructions() {
-        return '<p><strong>Install Gutenberg Plugin:</strong></p>
+        return '<p><strong>Clone Gutenberg Plugin from GitHub:</strong></p>
                 <ol>
-                    <li>Go to your WordPress admin → Plugins → Add New</li>
-                    <li>Search for "Gutenberg"</li>
-                    <li>Install and activate the plugin</li>
-                    <li>Or download from <a href="https://wordpress.org/plugins/gutenberg/" target="_blank">WordPress.org</a></li>
-                </ol>';
+                    <li>Navigate to your WordPress plugins directory: <code>cd ' . WP_PLUGIN_DIR . '</code></li>
+                    <li>Clone the Gutenberg repository: <code>git clone https://github.com/WordPress/gutenberg.git</code></li>
+                    <li>Navigate to the plugin directory: <code>cd gutenberg</code></li>
+                    <li>Install dependencies: <code>npm install</code></li>
+                    <li>Build the plugin: <code>npm run build</code></li>
+                    <li>Activate the plugin in WordPress admin</li>
+                </ol>
+                <p><strong>Alternative:</strong> Use <code>npm run dev</code> instead of <code>npm run build</code> for development builds with watch mode.</p>';
     }
 
     private function get_wp_repo_instructions() {
@@ -785,8 +886,19 @@ class ContributeToWordPress {
                     <li>Choose a memorable username (this will be your contributor identity)</li>
                     <li>Complete the registration process</li>
                     <li>Come back here and add your username in the Account Setup section above</li>
+                </ol>';
+    }
+
+    private function get_plugin_theme_git_instructions() {
+        return '<p><strong>Set Up Git Repository for Plugin/Theme Development:</strong></p>
+                <ol>
+                    <li>Navigate to your plugin or theme directory in terminal</li>
+                    <li>Initialize a git repository: <code>git init</code></li>
+                    <li>Add your files: <code>git add .</code></li>
+                    <li>Create your first commit: <code>git commit -m "Initial commit"</code></li>
+                    <li>Optionally, connect to a remote repository on GitHub for collaboration</li>
                 </ol>
-                <p><strong>Why you need this:</strong> Your WordPress.org account allows you to submit patches to Trac, comment on tickets, and participate in contributor discussions.</p>';
+                <p><strong>Alternative:</strong> Clone an existing plugin/theme repository from GitHub into your WordPress installation.</p>';
     }
 
     // AJAX handlers
@@ -821,26 +933,6 @@ class ContributeToWordPress {
         wp_send_json_success( 'Username verified and saved!' );
     }
 
-    public function ajax_toggle_debug() {
-        check_ajax_referer( 'ctw_nonce', 'nonce' );
-
-        $section = sanitize_text_field( $_POST['section'] );
-
-        if ( ! isset( $this->sections[$section] ) ) {
-            wp_send_json_error( 'Invalid section' );
-        }
-
-        // Get the real current state
-        $real_state = $this->check_requirement( $section );
-
-        // Return the opposite state for client-side toggle
-        wp_send_json_success( array(
-            'available' => ! $real_state,
-            'real_state' => $real_state,
-            'section_data' => $this->sections[$section],
-            'debug_mode' => true
-        ) );
-    }
 
     private function get_real_requirement_state( $key ) {
         if ( ! isset( $this->sections[$key] ) ) {
@@ -869,58 +961,13 @@ class ContributeToWordPress {
 
         foreach ( $stages as $stage_key => $stage ) {
             ob_start();
-            $this->render_single_stage_with_debug( $stage_key, $stage, $debug_overrides );
+            $this->render_single_stage( $stage_key, $stage, $debug_overrides );
             $stages_html .= ob_get_clean();
         }
 
         wp_send_json_success( array( 'html' => $stages_html ) );
     }
 
-    private function render_single_stage_with_debug( $stage_key, $stage, $debug_overrides = array() ) {
-        $missing_requirements = array();
-        $stage_ready = true;
-
-        foreach ( $stage['requirements'] as $req ) {
-            // Check debug override first, then real state
-            if ( isset( $debug_overrides[$req] ) ) {
-                $requirement_met = $debug_overrides[$req];
-            } else {
-                $requirement_met = $this->check_requirement( $req );
-            }
-
-            if ( ! $requirement_met ) {
-                $missing_requirements[] = $this->sections[$req]['name'];
-                $stage_ready = false;
-            }
-        }
-
-        $status_class = $stage_ready ? 'available' : 'not_ready';
-        $status_icon = $stage_ready ? '✅' : '⭕';
-        $border_color = $stage_ready ? '#2ea44f' : '#d1d5da';
-        $bg_color = $stage_ready ? '#f0fff4' : '#fafbfc';
-        $text_color = $stage_ready ? '#2ea44f' : '#586069';
-
-        ?>
-        <div class="stage-item <?php echo esc_attr( $status_class ); ?>" data-stage="<?php echo esc_attr( $stage_key ); ?>"
-             style="border: 2px solid <?php echo esc_attr( $border_color ); ?>; border-radius: 6px; padding: 20px; margin-bottom: 15px; background: <?php echo esc_attr( $bg_color ); ?>;">
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <div style="font-size: 24px;"><?php echo esc_html( $stage['icon'] ); ?></div>
-                <div style="flex: 1;">
-                    <h3 style="margin: 0; font-size: 18px; color: <?php echo esc_attr( $text_color ); ?>;">
-                        <?php echo esc_html( $status_icon . ' ' . $stage['title'] ); ?>
-                    </h3>
-                    <p style="margin: 5px 0; color: #586069;"><?php echo esc_html( $stage['description'] ); ?></p>
-
-                    <?php if ( ! $stage_ready && ! empty( $missing_requirements ) ) : ?>
-                        <p style="margin: 10px 0 0 0; color: #d73a49; font-size: 14px;">
-                            <strong>Missing:</strong> <?php echo esc_html( implode( ', ', $missing_requirements ) ); ?>
-                        </p>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-        <?php
-    }
 }
 
 // Initialize the plugin
