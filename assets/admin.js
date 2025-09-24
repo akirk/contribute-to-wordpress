@@ -187,14 +187,20 @@ jQuery(document).ready(function ($) {
             .addClass(isAvailable ? 'success' : 'error')
             .text(statusText);
 
+        // Update instructions whenever they're provided, regardless of availability
+        if (responseData.instructions) {
+            if ($instructions.length === 0) {
+                $section.append('<div class="instructions" id="instructions-' + section + '">' + responseData.instructions + '</div>');
+                $instructions = $('#instructions-' + section);
+            } else {
+                $instructions.html(responseData.instructions);
+            }
+        }
+
+        // Show/hide instructions based on availability
         if (isAvailable) {
             $instructions.slideUp();
         } else {
-            if ($instructions.length === 0 && responseData.instructions) {
-                $section.append('<div class="instructions" id="instructions-' + section + '">' + responseData.instructions + '</div>');
-            } else if (responseData.instructions) {
-                $instructions.html(responseData.instructions);
-            }
             $instructions.slideDown();
         }
     }
@@ -341,7 +347,9 @@ jQuery(document).ready(function ($) {
             const $section = $(this);
             const sectionKey = $section.data('section');
 
-            promises.push(loadSingleRequirement(sectionKey));
+            if (sectionKey) {
+                promises.push(loadSingleRequirement(sectionKey));
+            }
         });
 
         Promise.allSettled(promises).then(function () {
@@ -350,19 +358,32 @@ jQuery(document).ready(function ($) {
     }
 
     function loadSingleRequirement(section) {
+        console.log('Loading requirement for section:', section);
+
+        if (!section) {
+            console.error('Section is empty or undefined!');
+            return Promise.reject(new Error('Invalid section'));
+        }
+
         return new Promise(function (resolve, reject) {
             $.ajax({
                 url: ctw_ajax.ajax_url,
                 type: 'POST',
                 data: {
                     action: 'ctw_check_single_requirement',
-                    section,
+                    section: section,
                     nonce: ctw_ajax.nonce,
-                    overrides
+                    overrides: overrides
                 },
                 success: function (response) {
                     if (response.success) {
                         updateSectionUI(section, response.data);
+
+                        // Update platform if it was detected during this tool check, but only if user hasn't overridden it
+                        if (response.data.platform && !overrides.platform) {
+                            $('#current-platform').text(response.data.platform);
+                        }
+
                         resolve(response.data);
                     } else {
                         reject(new Error('Server error'));

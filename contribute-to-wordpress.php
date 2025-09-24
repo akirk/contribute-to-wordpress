@@ -46,14 +46,14 @@ class ContributeToWordPress {
                 'explanation_link' => 'https://en.wikipedia.org/wiki/Git',
                 'description' => 'Version control system for tracking changes',
                 'check_function' => array( $this, 'check_git' ),
-                'instructions' => $this->get_git_instructions(),
+                'instructions' => array( $this, 'get_git_instructions' ),
                 'needed_for' => 'Required for all contribution stages to manage code changes and collaborate with the WordPress team.'
             ),
             'wp_repo' => array(
                 'name' => 'WordPress Core GitHub Repository',
                 'description' => 'WordPress develop repository setup with /src directory',
                 'check_function' => array( $this, 'check_wordpress_repository' ),
-                'instructions' => $this->get_wp_repo_instructions(),
+                'instructions' => array( $this, 'get_wp_repo_instructions' ),
                 'needed_for' => 'Required for PHP and Block development to work with the official WordPress codebase.'
             ),
             'node' => array(
@@ -62,7 +62,7 @@ class ContributeToWordPress {
                 'explanation_link' => 'https://en.wikipedia.org/wiki/Node.js',
                 'description' => 'JavaScript runtime for building modern WordPress features',
                 'check_function' => array( $this, 'check_nodejs' ),
-                'instructions' => $this->get_nodejs_instructions(),
+                'instructions' => array( $this, 'get_nodejs_instructions' ),
                 'needed_for' => 'Required for Core Asset Building and Block development to build and test JavaScript features, compile CSS/JS assets, and develop Gutenberg blocks.'
             ),
             'npm' => array(
@@ -71,7 +71,7 @@ class ContributeToWordPress {
                 'explanation_link' => 'https://en.wikipedia.org/wiki/Npm_(software)',
                 'description' => 'Package manager for Node.js dependencies',
                 'check_function' => array( $this, 'check_npm' ),
-                'instructions' => $this->get_npm_instructions(),
+                'instructions' => array( $this, 'get_npm_instructions' ),
                 'needed_for' => 'Required for Core Asset Building and Block development to install and manage JavaScript packages and build tools for WordPress core assets.'
             ),
             'composer' => array(
@@ -80,7 +80,7 @@ class ContributeToWordPress {
                 'explanation' => 'The PHP package manager',
                 'explanation_link' => 'https://en.wikipedia.org/wiki/Composer_(software)',
                'check_function' => array( $this, 'check_composer' ),
-                'instructions' => $this->get_composer_instructions(),
+                'instructions' => array( $this, 'get_composer_instructions' ),
                 'needed_for' => 'Optional for PHP development to manage dependencies and run WordPress development tools.'
             ),
             'gutenberg' => array(
@@ -89,21 +89,21 @@ class ContributeToWordPress {
                 'explanation' => 'The Block Editor',
                 'explanation_link' => 'https://github.com/WordPress/gutenberg',
                 'check_function' => array( $this, 'check_gutenberg_plugin' ),
-                'instructions' => $this->get_gutenberg_instructions(),
+                'instructions' => array( $this, 'get_gutenberg_instructions' ),
                 'needed_for' => 'Block development happens in the Gutenberg plugin repository.'
             ),
             'plugin_theme_git' => array(
                 'name' => 'Plugin and Theme Development',
                 'description' => 'At least one plugin or theme under git version control',
                 'check_function' => array( $this, 'check_plugin_theme_git' ),
-                'instructions' => $this->get_plugin_theme_git_instructions(),
+                'instructions' => array( $this, 'get_plugin_theme_git_instructions' ),
                 'needed_for' => 'Git-managed plugins and themes enable proper version control, collaboration, and contribution workflows for WordPress development.'
             ),
             'wporg_account' => array(
                 'name' => 'WordPress.org Account',
                 'description' => 'Your WordPress.org community account',
                 'check_function' => array( $this, 'check_wporg_account' ),
-                'instructions' => $this->get_wporg_account_instructions(),
+                'instructions' => array( $this, 'get_wporg_account_instructions' ),
                 'needed_for' => 'Required for contributing back to submit patches, create tickets, and participate in the WordPress community.'
             )
         );
@@ -224,7 +224,7 @@ class ContributeToWordPress {
         return array(
             'web' => array(
                 'title' => 'GitHub Web Interface Contributions',
-                'description' => 'Edit files directly on GitHub without local development setup',
+                'description' => 'Edit files directly on GitHub without local development setup. <a href="">Follow our guide</a>',
                 'icon' => '🌐',
                 'requirements' => array()
             ),
@@ -324,7 +324,7 @@ class ContributeToWordPress {
                     <h3 class="stage-title <?php echo esc_attr( $status_class ); ?>">
                         <?php echo esc_html( $status_icon . ' ' . $stage['title'] ); ?>
                     </h3>
-                    <p class="stage-description"><?php echo esc_html( $stage['description'] ); ?></p>
+                    <p class="stage-description"><?php echo wp_kses( $stage['description'], array( 'a' => array( 'href' => array(), 'target' => array() ) ) ); ?></p>
 
                     <?php if ( $undetermined ) : ?>
                         <p class="stage-checking">
@@ -434,7 +434,12 @@ class ContributeToWordPress {
                             </p>
                         </div>
 
-                        <?php echo wp_kses_post( $section['instructions'] ); ?>
+                        <?php
+                        $instructions_method = $section['instructions'];
+                        if ( is_callable( $instructions_method ) ) {
+                            echo wp_kses_post( call_user_func( $instructions_method ) );
+                        }
+                        ?>
                     </div>
                 <?php endif; ?>
             </div>
@@ -516,6 +521,12 @@ class ContributeToWordPress {
         if ( isset( $this->current_overrides['platform'] ) ) {
             return $this->current_overrides['platform'];
         }
+
+        // Check if platform was already detected (e.g., WordPress Studio)
+        if ( $this->platform ) {
+            return $this->platform;
+        }
+
         return $this->detect_platform();
     }
 
@@ -557,7 +568,14 @@ class ContributeToWordPress {
 
         // Check debug override first
         if ( isset( $overrides[$key] ) ) {
-            return $overrides[$key];
+            // Convert string boolean values to actual booleans
+            $override_value = $overrides[$key];
+            if ( $override_value === 'false' || $override_value === false ) {
+                return false;
+            } elseif ( $override_value === 'true' || $override_value === true ) {
+                return true;
+            }
+            return $override_value;
         }
 
         $this->current_overrides = $overrides;
@@ -1005,15 +1023,25 @@ class ContributeToWordPress {
 
         $this->current_overrides = $overrides;
 
+        // Store the platform before tool check
+        $platform_before = $this->platform;
+
         $result = $this->check_requirement( $section_key, $overrides );
         $version = $this->get_tool_version( $section_key );
         $instructions = $this->get_section_instructions( $section_key );
 
-        wp_send_json_success( array(
+        $response = array(
             'status' => $result,
             'version' => $version,
             'instructions' => $instructions
-        ) );
+        );
+
+        // Only include platform if it was updated during the check
+        if ( $this->platform && $this->platform !== $platform_before ) {
+            $response['platform'] = $this->platform;
+        }
+
+        wp_send_json_success( $response );
     }
 
     private function get_tool_version( $section_key ) {
