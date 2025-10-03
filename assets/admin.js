@@ -169,22 +169,30 @@ jQuery(document).ready(function ($) {
         const $badge = $section.find('.status-badge');
         const $instructions = $('#instructions-' + section);
 
-        const isAvailable = !!responseData.status;
+        let isAvailable = !!responseData.status;
+        let isWarning = false;
         let statusText;
 
-        if (isAvailable && responseData.version) {
+        // Check if responseData.status is an object with warning status
+        if (typeof responseData.status === 'object' && responseData.status.status === 'warning') {
+            isWarning = true;
+            isAvailable = true; // Treat as available but with warning
+            statusText = "⚠ " + responseData.status.message;
+        } else if (isAvailable && responseData.version) {
             statusText = "✓ " + responseData.version + " detected";
         } else {
             statusText = isAvailable ? '✓ Available' : '✗ Not available';
         }
 
-        $section.removeClass('loading complete incomplete').addClass(isAvailable ? 'complete' : 'incomplete');
+        $section.removeClass('loading complete incomplete warning').addClass(
+            isWarning ? 'warning' : (isAvailable ? 'complete' : 'incomplete')
+        );
 
-        $icon.removeClass('dashicons-update dashicons-yes-alt dashicons-dismiss')
-            .addClass(isAvailable ? 'dashicons-yes-alt' : 'dashicons-dismiss');
+        $icon.removeClass('dashicons-update dashicons-yes-alt dashicons-dismiss dashicons-warning')
+            .addClass(isWarning ? 'dashicons-warning' : (isAvailable ? 'dashicons-yes-alt' : 'dashicons-dismiss'));
 
-        $badge.removeClass('loading success error')
-            .addClass(isAvailable ? 'success' : 'error')
+        $badge.removeClass('loading success error warning')
+            .addClass(isWarning ? 'warning' : (isAvailable ? 'success' : 'error'))
             .text(statusText);
 
         // Update instructions whenever they're provided, regardless of availability
@@ -197,8 +205,8 @@ jQuery(document).ready(function ($) {
             }
         }
 
-        // Show/hide instructions based on availability
-        if (isAvailable) {
+        // Show/hide instructions - show for warning state
+        if (isAvailable && !isWarning) {
             $instructions.slideUp();
         } else {
             $instructions.slideDown();

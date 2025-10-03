@@ -42,7 +42,7 @@ class ContributeToWordPress {
         $this->sections = array(
             'git' => array(
                 'name' => 'Git',
-                'explanation' => 'The version control system',
+                'explanation' => 'Used to contribute code changes',
                 'explanation_link' => 'https://en.wikipedia.org/wiki/Git',
                 'check_function' => array( $this, 'check_git' ),
                 'instructions' => array( $this, 'get_git_instructions' ),
@@ -50,14 +50,14 @@ class ContributeToWordPress {
             ),
             'wp_repo' => array(
                 'name' => 'WordPress Core GitHub Repository',
-		'explanation' => 'The WordPress source code plus build tooling',
+                'explanation' => 'The WordPress source code plus build tooling',
                 'check_function' => array( $this, 'check_wordpress_repository' ),
                 'instructions' => array( $this, 'get_wp_repo_instructions' ),
                 'needed_for' => 'Required for PHP and Block development to work with the official WordPress codebase.'
             ),
             'node' => array(
                 'name' => 'Node.js',
-                'explanation' => 'The JavaScript runtime',
+                'explanation' => 'Allows running the JavaScript tooling in WordPress, only needed for development',
                 'explanation_link' => 'https://en.wikipedia.org/wiki/Node.js',
                 'check_function' => array( $this, 'check_nodejs' ),
                 'instructions' => array( $this, 'get_nodejs_instructions' ),
@@ -65,7 +65,7 @@ class ContributeToWordPress {
             ),
             'npm' => array(
                 'name' => 'npm',
-                'explanation' => 'The JavaScript package manager',
+                'explanation' => 'Required to install packages for WordPress development, like <tt>wp-scripts</tt>',
                 'explanation_link' => 'https://en.wikipedia.org/wiki/Npm_(software)',
                 'check_function' => array( $this, 'check_npm' ),
                 'instructions' => array( $this, 'get_npm_instructions' ),
@@ -73,15 +73,15 @@ class ContributeToWordPress {
             ),
             'composer' => array(
                 'name' => 'Composer',
-                'explanation' => 'The PHP package manager',
+                'explanation' => 'Required to install PHP tooling for WordPress development, like <tt>phpcs</tt> and <tt>phpunit</tt>',
                 'explanation_link' => 'https://en.wikipedia.org/wiki/Composer_(software)',
-               'check_function' => array( $this, 'check_composer' ),
+                'check_function' => array( $this, 'check_composer' ),
                 'instructions' => array( $this, 'get_composer_instructions' ),
                 'needed_for' => 'Optional for PHP development to manage dependencies and run WordPress development tools.'
             ),
             'gutenberg' => array(
                 'name' => 'Gutenberg Development version',
-                'explanation' => 'The Block Editor',
+                'explanation' => 'Core WordPress blocks and the block editor have their original source code here',
                 'explanation_link' => 'https://github.com/WordPress/gutenberg',
                 'check_function' => array( $this, 'check_gutenberg_plugin' ),
                 'instructions' => array( $this, 'get_gutenberg_instructions' ),
@@ -89,6 +89,7 @@ class ContributeToWordPress {
             ),
             'plugin_theme_git' => array(
                 'name' => 'Plugin and Theme Development',
+                'explanation' => 'Plugins and Themes in your WordPress that are managed with git',
                 'check_function' => array( $this, 'check_plugin_theme_git' ),
                 'instructions' => array( $this, 'get_plugin_theme_git_instructions' ),
                 'needed_for' => 'Git-managed plugins and themes enable proper version control, collaboration, and contribution workflows for WordPress development.'
@@ -103,7 +104,7 @@ class ContributeToWordPress {
             ),
             'wporg_account' => array(
                 'name' => 'WordPress.org Account',
-		'explanation' => 'Required to submit your plugin or theme to WordPress.org or contribute to a Trac issue',
+                'explanation' => 'Required to submit your plugin or theme to WordPress.org or contribute to a Trac issue',
                 'check_function' => array( $this, 'check_wporg_account' ),
                 'instructions' => array( $this, 'get_wporg_account_instructions' ),
                 'needed_for' => 'Required for contributing back to submit patches, create tickets, and participate in the WordPress community.'
@@ -419,7 +420,7 @@ class ContributeToWordPress {
                     <strong><?php echo esc_html( $section['name'] ); ?></strong>
                     <?php if ( ! empty( $section['explanation'] ) ) : ?>
                         <span>—</span>
-                        <span class="tool-explanation"><?php echo esc_html( $section['explanation'] ); ?></span>
+                        <span class="tool-explanation"><?php echo wp_kses_post( $section['explanation'] ); ?></span>
                         <?php if ( ! empty( $section['explanation_link'] ) ) : ?>
                             <a href="<?php echo esc_url( $section['explanation_link'] ); ?>" target="_blank" title="More information">?</a>
                         <?php endif; ?>
@@ -1003,7 +1004,7 @@ class ContributeToWordPress {
     }
 
     private function check_plugin_check() {
-        $plugin_file = 'plugin-check/plugin-check.php';
+        $plugin_file = 'plugin-check/plugin.php';
 
         if ( ! function_exists( 'is_plugin_active' ) ) {
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -1013,17 +1014,33 @@ class ContributeToWordPress {
             return 'Plugin Check (Active)';
         }
 
-        $plugin_path = WP_PLUGIN_DIR . '/plugin-check/plugin-check.php';
+        $plugin_path = WP_PLUGIN_DIR . '/plugin-check/plugin.php';
         if ( file_exists( $plugin_path ) ) {
-            return 'Plugin Check (Inactive)';
+            return array(
+                'status' => 'warning',
+                'message' => 'Plugin Check (Inactive)'
+            );
         }
 
         return false;
     }
 
     private function get_plugin_check_instructions() {
-        $install_url = admin_url( 'plugin-install.php?s=plugin-check&tab=search&type=term' );
+        $plugin_file = 'plugin-check/plugin.php';
+        $plugin_path = WP_PLUGIN_DIR . '/plugin-check/plugin.php';
 
+        if ( file_exists( $plugin_path ) ) {
+            $activate_url = admin_url( 'plugins.php?s=Plugin+Check' );
+            return '<p><strong>Activate Plugin Check Plugin:</strong></p>
+                    <ol>
+                        <li>Go to <a href="' . esc_url( $activate_url ) . '">Plugins</a> in your WordPress admin</li>
+                        <li>Find "Plugin Check" in the list and click "Activate"</li>
+                        <li>Use it to validate your plugin before submission to the WordPress.org plugin directory</li>
+                    </ol>
+                    <p><strong>Alternative:</strong> Activate via WP-CLI: <code>wp plugin activate plugin-check</code></p>';
+        }
+
+        $install_url = admin_url( 'plugin-install.php?s=plugin-check&tab=search&type=term' );
         return '<p><strong>Install Plugin Check Plugin:</strong></p>
                 <ol>
                     <li>Go to <a href="' . esc_url( $install_url ) . '">Plugins → Add New</a> in your WordPress admin</li>
