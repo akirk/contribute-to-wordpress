@@ -32,7 +32,6 @@ class ContributeToWordPress {
         add_action( 'wp_ajax_ctw_check_requirements', array( $this, 'ajax_check_requirements' ) );
         add_action( 'wp_ajax_ctw_check_single_requirement', array( $this, 'ajax_check_single_requirement' ) );
         add_action( 'wp_ajax_ctw_verify_username', array( $this, 'ajax_verify_username' ) );
-        add_action( 'wp_ajax_ctw_set_platform', array( $this, 'ajax_set_platform' ) );
         add_action( 'wp_ajax_ctw_get_stages', array( $this, 'ajax_get_stages' ) );
 
         $this->init_sections();
@@ -150,7 +149,8 @@ class ContributeToWordPress {
             <!-- Contribution Stages -->
             <div class="contribution-stages">
                 <h2>Thank you for wanting to contribute to WordPress!</h2>
-                <p>Find below an analysis of your environment so that you can get started with development:</p>
+                <p>Because of there are many different areas of WordPress development, there are different requirements to your local development environment depending on what you want to work on. We'll guide you setting it up.</p>
+
 
                 <div id="contribution-stages-container">
                     <?php $this->render_contribution_stages(); ?>
@@ -167,6 +167,7 @@ class ContributeToWordPress {
                     <select id="platform-override" onchange="overridePlatform(this.value)" class="platform-select">
                         <option value="">Override...</option>
                         <option value="Windows">Windows</option>
+                        <option value="WSL">WSL (Windows Subsystem for Linux)</option>
                         <option value="macOS">macOS</option>
                         <option value="Linux">Linux</option>
                         <option value="reset">Reset to Auto-detected</option>
@@ -216,6 +217,9 @@ class ContributeToWordPress {
                     </div>
                 </div>
             </div>
+
+            <!-- WSL Guidance for Windows Users -->
+            <?php $this->render_wsl_guidance(); ?>
 
             <!-- Learning Resources -->
             <?php $this->render_learning_resources(); ?>
@@ -453,6 +457,67 @@ class ContributeToWordPress {
         }
     }
 
+    private function render_wsl_guidance() {
+        $platform = $this->get_platform();
+        $is_windows = ( $platform === 'Windows' || $platform === 'WSL' );
+        ?>
+        <details class="checklist-section" id="windows-guidance-section" <?php echo $is_windows ? 'open' : ''; ?> style="<?php echo $is_windows ? '' : 'display: none;'; ?>">
+            <summary style="cursor: pointer; font-size: 1.3em; font-weight: 600; margin-bottom: 10px;">
+                <h2 style="display: inline;">🪟 Windows Development Environment</h2>
+            </summary>
+
+            <?php if ( $platform === 'WSL' ) : ?>
+                <div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; margin: 10px 0; border-radius: 5px;">
+                    <strong>✓ WSL Detected!</strong>
+                    <p>You're running WordPress in Windows Subsystem for Linux. This is the recommended setup for WordPress core development on Windows.</p>
+                </div>
+            <?php else : ?>
+                <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; margin: 10px 0; border-radius: 5px;">
+                    <strong>💡 Recommendation: Use WSL for WordPress Development</strong>
+                    <p>While native Windows tools work for basic contributions, <strong>WSL (Windows Subsystem for Linux)</strong> is recommended for WordPress core development because:</p>
+                    <ul style="margin: 10px 0; list-style-type: disc; padding-left: 30px;">
+                        <li>Better compatibility with WordPress build scripts</li>
+                        <li>Faster file operations (especially with npm)</li>
+                        <li>Native Linux environment matching production servers</li>
+                        <li>Easier to follow WordPress development documentation</li>
+                    </ul>
+                </div>
+
+                <h3>Setting Up WSL</h3>
+                <ol>
+                    <li><strong>Install WSL 2:</strong> Open PowerShell as Administrator and run:<br>
+                        <code>wsl --install</code><br>
+                        <small>This installs WSL 2 with Ubuntu by default</small>
+                    </li>
+                    <li><strong>Restart your computer</strong> when prompted</li>
+                    <li><strong>Set up Ubuntu:</strong> After restart, Ubuntu will open automatically. Create a username and password.</li>
+                    <li><strong>Update packages:</strong> In your WSL terminal, run:<br>
+                        <code>sudo apt-get update && sudo apt-get upgrade</code>
+                    </li>
+                    <li><strong>Install development tools:</strong> Follow the installation instructions above for Git, Node.js, Composer, etc.</li>
+                    <li><strong>Access files:</strong> Your Windows files are at <code>/mnt/c/</code> but it's faster to keep projects in <code>~/projects</code></li>
+                </ol>
+
+                <p><strong>Helpful Tips:</strong></p>
+                <ul style="list-style-type: disc; padding-left: 30px;">
+                    <li>Access WSL from Windows Terminal (recommended) or search for "Ubuntu" in Start menu</li>
+                    <li>Use VS Code with the "WSL" extension for seamless editing</li>
+                    <li>Once in WSL, change your platform setting above to "WSL" for accurate instructions</li>
+                </ul>
+
+                <h3>Alternative: Native Windows Development</h3>
+                <p>You can still contribute using native Windows tools if WSL isn't an option:</p>
+                <ul style="list-style-type: disc; padding-left: 30px;">
+                    <li>✅ Git for Windows, Node.js, and Composer all work on Windows</li>
+                    <li>✅ Good for plugin/theme development and basic core contributions</li>
+                    <li>⚠️ Some npm packages may have issues</li>
+                    <li>⚠️ Build scripts might require Git Bash instead of PowerShell</li>
+                </ul>
+            <?php endif; ?>
+        </details>
+        <?php
+    }
+
     private function render_learning_resources() {
         ?>
         <div class="checklist-section">
@@ -498,12 +563,14 @@ class ContributeToWordPress {
         if ( ! $this->platform ) {
             $os = strtolower( PHP_OS );
 
-            if ( strpos( $os, 'win' ) !== false || PHP_OS_FAMILY === 'Windows' ) {
-                $this->platform = 'Windows';
-            } elseif ( strpos( $os, 'darwin' ) !== false || PHP_OS_FAMILY === 'Darwin' ) {
+            // Check Darwin/macOS first to avoid matching "win" in "darwin"
+            if ( strpos( $os, 'darwin' ) !== false || PHP_OS_FAMILY === 'Darwin' ) {
                 $this->platform =  'macOS';
+            } elseif ( strpos( $os, 'win' ) === 0 || PHP_OS_FAMILY === 'Windows' ) {
+                // Use === 0 to match start of string, not anywhere in string
+                $this->platform = 'Windows';
             } else {
-                // For Linux/Unix, try to get more info with uname to detect containerized environments
+                // For Linux/Unix, try to get more info with uname to detect WSL and containerized environments
                 $uname = shell_exec( 'uname -a 2>/dev/null' );
                 if ( $uname ) {
                     $uname_lower = strtolower( $uname );
@@ -511,7 +578,8 @@ class ContributeToWordPress {
                     if ( strpos( $uname_lower, 'darwin' ) !== false ) {
                         $this->platform =  'macOS';
                     } elseif ( strpos( $uname_lower, 'microsoft' ) !== false || strpos( $uname_lower, 'wsl' ) !== false ) {
-                        $this->platform =  'Windows';
+                        // Detect WSL specifically - it shows as Linux but runs on Windows
+                        $this->platform =  'WSL';
                     }
                 }
             }
@@ -549,6 +617,14 @@ class ContributeToWordPress {
                     '/opt/local/bin'              // MacPorts
                 );
                 break;
+            case 'WSL':
+                $paths = array(
+                    '/usr/bin',
+                    '/usr/local/bin',
+                    '/home/' . get_current_user() . '/.nvm/versions/node',  // NVM in WSL
+                    '/snap/bin'                   // Snap packages
+                );
+                break;
             case 'Linux':
                 $paths = array(
                     '/usr/bin',
@@ -559,7 +635,9 @@ class ContributeToWordPress {
             case 'Windows':
                 $paths = array(
                     'C:\\Windows\\System32',
-                    'C:\\Program Files\\Git\\cmd'
+                    'C:\\Program Files\\Git\\cmd',
+                    'C:\\Program Files\\nodejs',
+                    'C:\\ProgramData\\ComposerSetup\\bin'
                 );
                 break;
         }
@@ -604,8 +682,17 @@ class ContributeToWordPress {
         $version = null;
         $note = null;
 
-        $enhanced_path = implode( ':', array_unique( $search_paths ) ) . ':' . getenv( 'PATH' );
-        $output = shell_exec( "PATH='$enhanced_path' $tool_name --version 2>&1" );
+        $platform = $this->get_platform();
+        $is_windows = ( $platform === 'Windows' );
+        $path_separator = $is_windows ? ';' : ':';
+
+        $enhanced_path = implode( $path_separator, array_unique( $search_paths ) ) . $path_separator . getenv( 'PATH' );
+
+        if ( $is_windows ) {
+            $output = shell_exec( "set PATH=$enhanced_path && $tool_name --version 2>&1" );
+        } else {
+            $output = shell_exec( "PATH='$enhanced_path' $tool_name --version 2>&1" );
+        }
 
         if ( $output ) {
             $version = $this->extract_semver( trim( $output ) );
@@ -613,8 +700,10 @@ class ContributeToWordPress {
             return false;
         }
 
+        $dir_separator = $is_windows ? '\\' : '/';
         foreach ( $search_paths as $search_path ) {
-            $full_path = rtrim( $search_path, '/' ) . '/' . $tool_name;
+            $tool_executable = $is_windows ? $tool_name . '.exe' : $tool_name;
+            $full_path = rtrim( $search_path, '/\\' ) . $dir_separator . $tool_executable;
             if ( file_exists( $full_path ) && is_executable( $full_path ) ) {
                $path = $full_path;
                break;
@@ -623,10 +712,15 @@ class ContributeToWordPress {
 
         if ( ! $path ) {
             foreach ( $search_paths as $search_path ) {
-                $output = shell_exec( "PATH='$search_path' $tool_name --version 2>&1" );
+                if ( $is_windows ) {
+                    $output = shell_exec( "set PATH=$search_path && $tool_name --version 2>&1" );
+                } else {
+                    $output = shell_exec( "PATH='$search_path' $tool_name --version 2>&1" );
+                }
                 if ( $output ) {
                     $path = $search_path;
-                    $this->platform = 'WordPress Studio';
+                    // Note: This might be WordPress Studio, but don't change platform
+                    // to avoid overwriting user's actual OS
                     break;
                 }
             }
@@ -647,12 +741,18 @@ class ContributeToWordPress {
     private function get_paths_from_shell_configs() {
         $paths = array();
 
+        // Get the home directory for the current user
+        $home_dir = $this->get_home_directory();
+        if ( ! $home_dir ) {
+            return $paths;
+        }
+
         // Common shell config files to check
         $config_files = array(
-            '/Users/alex/.zshrc',
-            '/Users/alex/.bashrc',
-            '/Users/alex/.bash_profile',
-            '/Users/alex/.profile'
+            $home_dir . '/.zshrc',
+            $home_dir . '/.bashrc',
+            $home_dir . '/.bash_profile',
+            $home_dir . '/.profile'
         );
 
         foreach ( $config_files as $config_file ) {
@@ -685,7 +785,7 @@ class ContributeToWordPress {
                             $nvm_current = shell_exec( 'bash -c "source ~/.nvm/nvm.sh && nvm current 2>/dev/null"' );
                             if ( $nvm_current ) {
                                 $version = trim( $nvm_current );
-                                $nvm_bin = "/Users/alex/.nvm/versions/node/$version/bin";
+                                $nvm_bin = $home_dir . "/.nvm/versions/node/$version/bin";
                                 if ( is_dir( $nvm_bin ) ) {
                                     $paths[] = $nvm_bin;
                                 }
@@ -699,43 +799,66 @@ class ContributeToWordPress {
         return array_unique( $paths );
     }
 
+    private function get_home_directory() {
+        // Try to get home directory in a cross-platform way
+        if ( function_exists( 'posix_getpwuid' ) && function_exists( 'posix_geteuid' ) ) {
+            $user_info = posix_getpwuid( posix_geteuid() );
+            if ( isset( $user_info['dir'] ) ) {
+                return $user_info['dir'];
+            }
+        }
+
+        // Fallback to environment variables
+        $home = getenv( 'HOME' );
+        if ( $home ) {
+            return $home;
+        }
+
+        // Windows fallback
+        $home_drive = getenv( 'HOMEDRIVE' );
+        $home_path = getenv( 'HOMEPATH' );
+        if ( $home_drive && $home_path ) {
+            return $home_drive . $home_path;
+        }
+
+        return false;
+    }
+
     private function check_git() {
         $result = $this->check_tool( 'git' );
         return $result ? 'Git ' . $result['version'] : false;
     }
 
     private function check_nodejs() {
-        $nvm_paths = array();
-
-        $user_dirs = glob( '/Users/*', GLOB_ONLYDIR );
-        if ( $user_dirs ) {
-            foreach ( $user_dirs as $user_dir ) {
-                $paths = glob( $user_dir . '/.nvm/versions/node/*/bin' );
-                if ( $paths ) {
-                    $nvm_paths = array_merge( $nvm_paths, $paths );
-                }
-            }
-        }
-
+        $nvm_paths = $this->get_nvm_paths();
         $result = $this->check_tool( 'node', $nvm_paths );
         return $result ? 'Node.js ' . $result['version'] : false;
     }
 
     private function check_npm() {
-        $nvm_paths = array();
+        $nvm_paths = $this->get_nvm_paths();
+        $result = $this->check_tool( 'npm', $nvm_paths );
+        return $result ? 'npm ' . $result['version'] : false;
+    }
 
-        $user_dirs = glob( '/Users/*', GLOB_ONLYDIR );
-        if ( $user_dirs ) {
-            foreach ( $user_dirs as $user_dir ) {
-                $paths = glob( $user_dir . '/.nvm/versions/node/*/bin' );
-                if ( $paths ) {
-                    $nvm_paths = array_merge( $nvm_paths, $paths );
-                }
+    private function get_nvm_paths() {
+        $nvm_paths = array();
+        $home_dir = $this->get_home_directory();
+
+        if ( ! $home_dir ) {
+            return $nvm_paths;
+        }
+
+        // Check for NVM installations
+        $nvm_base = $home_dir . '/.nvm/versions/node';
+        if ( is_dir( $nvm_base ) ) {
+            $paths = glob( $nvm_base . '/*/bin' );
+            if ( $paths ) {
+                $nvm_paths = array_merge( $nvm_paths, $paths );
             }
         }
 
-        $result = $this->check_tool( 'npm', $nvm_paths );
-        return $result ? 'npm ' . $result['version'] : false;
+        return $nvm_paths;
     }
 
     private function check_composer() {
@@ -893,7 +1016,19 @@ class ContributeToWordPress {
                             <li>Download Git from <a href="https://git-scm.com/download/win" target="_blank">git-scm.com</a></li>
                             <li>Run the installer and follow the setup wizard</li>
                             <li>Open Command Prompt or PowerShell and verify: <code>git --version</code></li>
-                        </ol>';
+                        </ol>
+                        <p><strong>Note:</strong> If you\'re using WSL, install Git inside WSL instead (see WSL instructions).</p>';
+            case 'WSL':
+                return '<p><strong>Install Git in WSL:</strong></p>
+                        <ol>
+                            <li>Open your WSL terminal</li>
+                            <li>Update package list: <code>sudo apt-get update</code></li>
+                            <li>Install Git: <code>sudo apt-get install git</code></li>
+                            <li>Verify installation: <code>git --version</code></li>
+                            <li>Configure Git: <code>git config --global user.name "Your Name"</code></li>
+                            <li>Configure email: <code>git config --global user.email "your.email@example.com"</code></li>
+                        </ol>
+                        <p><strong>Tip:</strong> Keep your WordPress files in WSL filesystem (e.g., <code>~/projects</code>) for better performance.</p>';
             case 'macOS':
                 return '<p><strong>Install Git on macOS:</strong></p>
                         <ol>
@@ -912,12 +1047,35 @@ class ContributeToWordPress {
     }
 
     private function get_nodejs_instructions() {
-        return '<p><strong>Install Node.js:</strong></p>
-                <ol>
-                    <li>Download from <a href="https://nodejs.org/" target="_blank">nodejs.org</a> (LTS version recommended)</li>
-                    <li>Run the installer for your platform</li>
-                    <li>Verify installation: <code>node --version</code></li>
-                </ol>';
+        $platform = $this->get_platform();
+
+        switch ( $platform ) {
+            case 'Windows':
+                return '<p><strong>Install Node.js on Windows:</strong></p>
+                        <ol>
+                            <li>Download from <a href="https://nodejs.org/" target="_blank">nodejs.org</a> (LTS version recommended)</li>
+                            <li>Run the .msi installer for Windows</li>
+                            <li>Restart your terminal and verify: <code>node --version</code></li>
+                        </ol>
+                        <p><strong>Alternative:</strong> Use a version manager like <a href="https://github.com/coreybutler/nvm-windows" target="_blank">nvm-windows</a> for easier Node.js version management.</p>';
+            case 'WSL':
+                return '<p><strong>Install Node.js in WSL:</strong></p>
+                        <ol>
+                            <li>Install NVM (Node Version Manager): <code>curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash</code></li>
+                            <li>Restart your terminal or run: <code>source ~/.bashrc</code></li>
+                            <li>Install latest LTS: <code>nvm install --lts</code></li>
+                            <li>Set as default: <code>nvm use --lts</code></li>
+                            <li>Verify installation: <code>node --version</code></li>
+                        </ol>
+                        <p><strong>Tip:</strong> NVM makes it easy to switch between Node.js versions for different projects.</p>';
+            default:
+                return '<p><strong>Install Node.js:</strong></p>
+                        <ol>
+                            <li>Download from <a href="https://nodejs.org/" target="_blank">nodejs.org</a> (LTS version recommended)</li>
+                            <li>Run the installer for your platform</li>
+                            <li>Verify installation: <code>node --version</code></li>
+                        </ol>';
+        }
     }
 
     private function get_npm_instructions() {
@@ -936,10 +1094,20 @@ class ContributeToWordPress {
             case 'Windows':
                 return '<p><strong>Install Composer on Windows:</strong></p>
                         <ol>
-                            <li>Download Composer installer from <a href="https://getcomposer.org/download/" target="_blank">getcomposer.org</a></li>
-                            <li>Run the installer and follow the setup wizard</li>
+                            <li>Download the Windows installer from <a href="https://getcomposer.org/download/" target="_blank">getcomposer.org</a></li>
+                            <li>Run <code>Composer-Setup.exe</code> and follow the setup wizard</li>
+                            <li>Restart your terminal and verify: <code>composer --version</code></li>
+                        </ol>
+                        <p><strong>Note:</strong> The installer will automatically detect your PHP installation.</p>';
+            case 'WSL':
+                return '<p><strong>Install Composer in WSL:</strong></p>
+                        <ol>
+                            <li>Download installer: <code>curl -sS https://getcomposer.org/installer -o composer-setup.php</code></li>
+                            <li>Install globally: <code>sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer</code></li>
+                            <li>Remove installer: <code>rm composer-setup.php</code></li>
                             <li>Verify installation: <code>composer --version</code></li>
-                        </ol>';
+                        </ol>
+                        <p><strong>Note:</strong> Make sure PHP is installed first: <code>sudo apt-get install php-cli php-mbstring php-xml unzip</code></p>';
             case 'macOS':
                 return '<p><strong>Install Composer on macOS:</strong></p>
                         <ol>

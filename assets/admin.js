@@ -1,6 +1,7 @@
 jQuery(document).ready(function ($) {
 
     let overrides = {};
+    let originalPlatform = null;
 
     initializePlatformOverride();
     loadRequirementsAsync();
@@ -43,11 +44,15 @@ jQuery(document).ready(function ($) {
     window.overridePlatform = function (platform) {
         if (!platform) return;
 
+        let currentPlatform;
+
         if (platform === 'reset') {
             delete overrides.platform;
-            $('#current-platform').text($('#current-platform').data('original') || 'Auto-detected');
+            currentPlatform = originalPlatform || 'Auto-detected';
+            $('#current-platform').text(currentPlatform);
         } else {
             overrides.platform = platform;
+            currentPlatform = platform;
             $('#current-platform').text(platform);
         }
 
@@ -55,13 +60,28 @@ jQuery(document).ready(function ($) {
         $('#platform-wrong-link').show();
         $('#platform-override').val('');
 
+        updateWindowsGuidanceVisibility(currentPlatform);
         updatePlatformInstructions();
     };
 
+    function updateWindowsGuidanceVisibility(platform) {
+        const $windowsGuidance = $('#windows-guidance-section');
+
+        if (!$windowsGuidance.length) return;
+
+        if (platform === 'Windows' || platform === 'WSL') {
+            $windowsGuidance.show();
+            $windowsGuidance.prop('open', true);
+        } else {
+            $windowsGuidance.hide();
+        }
+    }
+
     function initializePlatformOverride() {
         const $platform = $('#current-platform');
-        const originalPlatform = $platform.text();
+        originalPlatform = $platform.text().trim();
 
+        // Also store in data attribute as backup
         $platform.data('original', originalPlatform);
     }
 
