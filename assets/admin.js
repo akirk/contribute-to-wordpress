@@ -219,6 +219,7 @@ jQuery(document).ready(function ($) {
             'composer': 'Composer',
             'gutenberg': 'Gutenberg Plugin',
             'plugin_theme_git': 'Plugin/Theme Git Repository',
+            'plugin_check': 'Plugin Check',
             'wporg_account': 'WordPress.org Account'
         };
 
@@ -231,7 +232,7 @@ jQuery(document).ready(function ($) {
             'php': { requirements: ['git', 'wp_repo'], optional: ['composer'] },
             'assets': { requirements: ['git', 'wp_repo', 'node', 'npm'] },
             'blocks': { requirements: ['git', 'wp_repo', 'node', 'npm', 'gutenberg'] },
-            'plugins_themes': { requirements: ['git', 'plugin_theme_git'] },
+            'plugins_themes': { requirements: ['git', 'plugin_theme_git'], optional: ['plugin_check'] },
             'contribute': { requirements: ['wporg_account'] }
         };
 
@@ -243,6 +244,7 @@ jQuery(document).ready(function ($) {
 
             let stageReady = true;
             const missingRequirements = [];
+            const missingOptional = [];
 
             stage.requirements.forEach(req => {
                 const isAvailable = overrides[req] !== undefined ?
@@ -256,15 +258,29 @@ jQuery(document).ready(function ($) {
                 }
             });
 
-            updateStageUI(stageKey, stageReady, missingRequirements);
+            if (stage.optional) {
+                stage.optional.forEach(opt => {
+                    const isAvailable = overrides[opt] !== undefined ?
+                        overrides[opt] :
+                        getToolStatus(opt);
+
+                    if (!isAvailable) {
+                        const toolName = getToolName(opt);
+                        missingOptional.push(toolName);
+                    }
+                });
+            }
+
+            updateStageUI(stageKey, stageReady, missingRequirements, missingOptional);
         });
     }
 
-    function updateStageUI(stageKey, isReady, missingRequirements) {
+    function updateStageUI(stageKey, isReady, missingRequirements, missingOptional) {
         const $stage = $('[data-stage="' + stageKey + '"]');
         const $title = $stage.find('.stage-title');
         const $checking = $stage.find('.stage-checking');
         let $missing = $stage.find('.stage-missing');
+        let $optional = $stage.find('.stage-optional');
 
         $stage.removeClass('available missing undetermined').addClass(isReady ? 'available' : 'missing');
         $title.removeClass('available missing undetermined').addClass(isReady ? 'available' : 'missing');
@@ -290,6 +306,19 @@ jQuery(document).ready(function ($) {
                 $missing.find('span').text(missingRequirements.join(', '));
                 $missing.show();
             }
+        }
+
+        // Handle optional requirements
+        if (missingOptional && missingOptional.length > 0) {
+            if ($optional.length === 0) {
+                // Create optional requirements element if it doesn't exist
+                $stage.find('.stage-details').append('<p class="stage-optional"><strong>Optional:</strong> <span></span> (recommended but not required)</p>');
+                $optional = $stage.find('.stage-optional');
+            }
+            $optional.find('span').text(missingOptional.join(', '));
+            $optional.show();
+        } else {
+            $optional.hide();
         }
     }
 
