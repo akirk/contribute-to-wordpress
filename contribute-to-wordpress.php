@@ -475,7 +475,7 @@ class ContributeToWordPress {
                     <ul>
                         <li><a href="https://core.trac.wordpress.org/" target="_blank">WordPress Trac</a> - Bug tracking</li>
                         <li><a href="https://github.com/WordPress/wordpress-develop" target="_blank">GitHub Repository</a></li>
-                        <li><a href="https://core.trac.wordpress.org/report/40" target="_blank">Good First Bugs</a></li>
+                        <li><a href="https://core.trac.wordpress.org/tickets/good-first-bugs" target="_blank">Good First Bugs</a></li>
                         <li><a href="https://build.trac.wordpress.org/" target="_blank">Build/Test Results</a></li>
                     </ul>
                 </div>
